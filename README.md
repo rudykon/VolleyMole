@@ -8,6 +8,10 @@
   A local-first desktop web app that digs rallies out of long volleyball videos.
 </p>
 
+<p align="center">
+  <strong>English</strong> · <a href="README_zh.md">简体中文</a>
+</p>
+
 ## ✨ What it does
 
 VolleyMole turns suitable continuous match footage into reviewable, independent rally clips. The web interface and processing service run on the same computer, and frame-by-frame detection uses the local GPU by default.
