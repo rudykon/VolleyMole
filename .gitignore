@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.env
+*.mp4
+*.mov
+*.mkv
+*.avi
+outputs/
