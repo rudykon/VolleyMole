@@ -1,4 +1,4 @@
-# VolleyMole
+<p align="center">\n  <img src="docs/brand/volleymole-logo.png" alt="VolleyMole" width="1000">\n</p>\n\n# VolleyMole
 
 VolleyMole is a local-first desktop web application for turning suitable volleyball match videos into reviewable rally clips. The web interface and video-processing service run on the same computer; frame-by-frame detection uses the local GPU by default.
 
