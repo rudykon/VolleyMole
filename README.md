@@ -1,21 +1,43 @@
-<p align="center">\n  <img src="docs/brand/volleymole-logo.png" alt="VolleyMole" width="1000">\n</p>\n\n# VolleyMole
+<p align="center">
+  <img src="docs/brand/volleymole-logo.png" alt="VolleyMole" width="1000">
+</p>
 
-VolleyMole is a local-first desktop web application for turning suitable volleyball match videos into reviewable rally clips. The web interface and video-processing service run on the same computer; frame-by-frame detection uses the local GPU by default.
+<h1 align="center">🏐 VolleyMole</h1>
 
-## Version 1 scope
+<p align="center">
+  A local-first desktop web app that digs rallies out of long volleyball videos.
+</p>
 
-Version 1 targets continuous footage of one visible court from a fixed or slightly shaky camera. The court and the main ball-flight area should remain substantially visible.
+## ✨ What it does
 
-The initial workflow is deliberately small:
+VolleyMole turns suitable continuous match footage into reviewable, independent rally clips. The web interface and processing service run on the same computer, and frame-by-frame detection uses the local GPU by default.
 
-1. select a local match video;
-2. run local analysis;
-3. review detected rally boundaries;
-4. export each accepted rally as an independent clip.
+The v1 workflow is intentionally focused:
 
-TV edits, multiple cameras, frequent zooms or cuts, long periods away from the court, and multiple courts in one frame are outside the guaranteed v1 operating conditions. Player identification, personal highlight reels, action classification, tactical statistics, automatic vertical reframing, and generative transitions are deferred rather than implied by this repository.
+1. 📂 Select a local match video.
+2. 🔍 Run local analysis.
+3. ✂️ Review detected rally boundaries.
+4. 📦 Export accepted rallies as individual clips.
 
-## Architecture
+## 🎯 Version 1 scope
+
+VolleyMole v1 is designed for:
+
+- one visible volleyball court;
+- a fixed or slightly shaky camera;
+- continuous match footage without frequent cuts;
+- footage where the court and main ball-flight area remain substantially visible.
+
+### 🚧 Outside the guaranteed v1 conditions
+
+- TV-style edits or frequent scene changes
+- Multiple cameras or courts
+- Frequent zooming
+- Long periods away from the court
+
+Player identification, personal highlight reels, action classification, tactical statistics, automatic 9:16 reframing, and generative transitions are deferred features—not part of the v1 commitment.
+
+## 🧩 Architecture
 
 ```text
 React + TypeScript + Vite UI
@@ -24,19 +46,27 @@ React + TypeScript + Vite UI
 Python local service
             │
             ├── video metadata and job orchestration
-            └── local GPU inference (model integration follows)
+            └── local GPU inference
 ```
 
-Uploaded videos are represented by local file metadata in the current scaffold. No cloud backend or upload path is included.
+Videos stay on the user's computer. This scaffold contains no cloud backend or video-upload path.
 
-## Quick start
+## 🚀 Quick start
 
-Requirements: Node.js 20+, Python 3.11+, and a recent `uv` installation.
+### Requirements
+
+- Node.js 20+
+- Python 3.11+
+- A recent [uv](https://docs.astral.sh/uv/) installation
+
+### Start the web interface
 
 ```bash
 npm install
 npm run dev
 ```
+
+### Start the local processing service
 
 In another terminal:
 
@@ -46,9 +76,9 @@ uv sync
 uv run uvicorn volleymole_service.main:app --reload --port 8000
 ```
 
-Open `http://localhost:5173`. The service health endpoint is `http://localhost:8000/api/health`.
+Open [http://localhost:5173](http://localhost:5173). The service health endpoint is [http://localhost:8000/api/health](http://localhost:8000/api/health).
 
-## Repository layout
+## 📁 Repository layout
 
 ```text
 src/                         desktop web UI
@@ -56,10 +86,10 @@ services/inference/          local Python processing service
 services/inference/tests/    service contract tests
 ```
 
-## Status
+## 🛠️ Development status
 
-Early v1 scaffold. Model integration and the editable rally-review workflow are the next implementation milestones.
+VolleyMole is an early v1 scaffold. The next implementation milestones are local model integration and an editable rally-review workflow.
 
-## License
+## 📄 License
 
-MIT
+[MIT](LICENSE)
