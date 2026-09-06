@@ -1,0 +1,47 @@
+name: Stage 0-1 engineering checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stage01-engine-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-regression:
+    name: Public regressions (not model-quality acceptance)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: src
+      UV_PYTHON_DOWNLOADS: never
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install public test prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
+          python -m pip install --index-url https://pypi.org/simple uv==0.11.14
+      - name: Install locked engineering dependencies (no GPU libraries)
+        # Keep the exact ORT package/version; never substitute a CPU detector.
+        # The policy tests intercept construction and do not run inference.
+        run: |
+          uv sync --locked --python 3.12 \
+            --no-install-package nvidia-cublas-cu12 \
+            --no-install-package nvidia-cudnn-cu12 \
+            --no-install-package nvidia-cuda-nvrtc-cu12
+      - name: Run every test that does not require private inputs
+        run: .venv/bin/python -m pytest -q -m 'not local_data'
+      - name: Confirm tracked files were not rewritten
+        run: git diff --exit-code

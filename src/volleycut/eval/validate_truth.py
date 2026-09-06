@@ -9,10 +9,16 @@ from pathlib import Path
 from .frame_metrics import FRAME_METRICS_VERSION
 from .matching import MATCHING_VERSION
 
+TRUTH_VALIDATION_VERSION = 2
+
 
 def sha(path):
     with open(path, "rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def _nonempty_text(value):
+    return isinstance(value, str) and bool(value.strip())
 
 
 def validate(root, verify_images=True):
@@ -72,21 +78,28 @@ def validate(root, verify_images=True):
         if invalid or unreviewed or corrupt:
             errors.append(f"{prefix}: invalid={len(invalid)}, unlabeled={len(unreviewed)}, corrupt={len(corrupt)}")
         rallies = json.loads(rally_path.read_text())
-        if (rallies.get("status") != "reviewed" or not rallies.get("annotator")
+        if (rallies.get("status") != "reviewed" or not _nonempty_text(rallies.get("annotator"))
                 or rallies.get("independent_of_frame_labels_and_predictions") is not True):
             errors.append(f"{prefix}: independent rally review not complete")
         if not rallies["rallies"] and not (rallies.get("confirmed_no_rallies") is True
-                                           and rallies.get("boundary_context_notes")):
+                                           and _nonempty_text(rallies.get("boundary_context_notes"))):
             errors.append(f"{prefix}: empty rally list is not a reviewed negative")
         for rally in rallies["rallies"]:
             try:
                 begin, end = rally["start_ms"], rally["end_ms"]
-                assert type(begin) is int and type(end) is int and begin < end
+                # Gate checks must remain active under python -O. Booleans are
+                # not timestamps or indices even though bool subclasses int.
+                if type(begin) is not int or type(end) is not int or begin >= end:
+                    raise ValueError("invalid rally time interval")
                 for edge in ("start", "end"):
                     idx = rally[f"{edge}_frame_idx"]
-                    assert 0 <= idx < len(pts) and round(pts[idx]) == rally[f"{edge}_ms"]
-                    assert rally[f"{edge}_evidence"].strip()
-            except (KeyError, AssertionError, TypeError, IndexError):
+                    if type(idx) is not int or not 0 <= idx < len(pts):
+                        raise ValueError("invalid boundary frame index")
+                    if round(pts[idx]) != rally[f"{edge}_ms"]:
+                        raise ValueError("boundary time does not match source PTS")
+                    if not _nonempty_text(rally[f"{edge}_evidence"]):
+                        raise ValueError("missing boundary evidence")
+            except (KeyError, ValueError, TypeError, IndexError):
                 errors.append(f"{prefix}: invalid or undocumented rally boundary")
         fingerprints[clip["frame_labels"]] = sha(label_path)
         fingerprints[clip["rally_labels"]] = sha(rally_path)
@@ -95,6 +108,7 @@ def validate(root, verify_images=True):
                         "rally_status": rallies.get("status"), "rallies": len(rallies["rallies"])})
     return {"status": "ready_to_freeze" if not errors else "not_ready", "errors": errors,
             "clips": details, "label_sha256": fingerprints, "images_verified": verify_images,
+            "truth_validation_version": TRUTH_VALIDATION_VERSION,
             "matching_version": MATCHING_VERSION, "frame_metrics_version": FRAME_METRICS_VERSION}
 
 

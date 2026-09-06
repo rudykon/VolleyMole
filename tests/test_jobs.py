@@ -6,8 +6,8 @@ from pathlib import Path
 from volleycut.jobs import JobRequest, run_detection_job
 
 ROOT = Path(__file__).resolve().parents[1]
-VIDEO = ROOT / "experiments/stage0/samples/2.mp4"
-MODEL = ROOT / "tools/fast-volleyball-tracking-inference/models/VballNetV1_seq9_grayscale_330_h288_w512.onnx"
+VIDEO = "unused.mp4"
+MODEL = "unused.onnx"
 
 
 def request(tmp_path):
@@ -38,10 +38,12 @@ def test_cross_output_root_lock_prevents_concurrent_analysis(tmp_path):
     assert not (tmp_path / "blocked").exists()
 
 
-def test_cancel_before_model_load_is_structured_and_not_complete(tmp_path):
+def test_cancel_before_model_load_is_structured_and_not_complete(tmp_path, synthetic_video):
     event = threading.Event()
     event.set()
-    result = run_detection_job(request(tmp_path), cancel_event=event, analysis_id="cancelled")
+    req = request(tmp_path)
+    req.video_path = str(synthetic_video)
+    result = run_detection_job(req, cancel_event=event, analysis_id="cancelled")
     assert result["status"] == "cancelled"
     assert result["error"]["code"] == "CANCELLED"
     assert not (tmp_path / "cancelled/COMPLETED").exists()

@@ -28,4 +28,8 @@ index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-markers = ["real_media: uses repository real video excerpts and FFmpeg"]
+addopts = "--strict-markers --strict-config"
+markers = [
+    "real_media: uses repository real video excerpts and FFmpeg",
+    "local_data: requires private local media or annotation material; missing inputs fail, not skip",
+]

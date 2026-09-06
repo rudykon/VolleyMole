@@ -21,6 +21,7 @@ def audio_hash(path):
 
 
 @pytest.mark.real_media
+@pytest.mark.local_data
 @pytest.mark.parametrize("name", ["2.mp4", "IMG_0171.MOV"])
 def test_real_proxy_keeps_audio_rotation_and_exact_pts(tmp_path, name):
     source = SAMPLES / name
@@ -43,7 +44,9 @@ def test_real_proxy_keeps_audio_rotation_and_exact_pts(tmp_path, name):
 
 
 @pytest.mark.real_media
+@pytest.mark.local_data
 def test_real_ffmpeg_proxy_can_be_cancelled_promptly(tmp_path):
+    assert (SAMPLES / "IMG_0171.MOV").exists(), "Prepare the private local media first"
     started = time.monotonic()
     calls = []
 

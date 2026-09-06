@@ -5,6 +5,10 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.local_data
+
 ROOT = Path(__file__).resolve().parents[1]
 PACKET = ROOT / "data/validation_work/2_tuning"
 CONTEXT = PACKET / "context_to_150000"

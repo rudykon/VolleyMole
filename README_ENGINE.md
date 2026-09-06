@@ -32,15 +32,16 @@ PYTHONPATH=src uv run python -m volleycut run \
 
 ## 可公开复现的检查
 
-不依赖未上传视频/模型的测试子集：
-
-以下子集不读取用户视频、实际标注或实验报告；完整材料测试需另行准备本地数据。
+公开工程测试不读取用户视频、实际标注或实验报告；使用临时生成的色块视频和校验器夹具，
+不做模型推理、不生成质量基线。需要 FFmpeg/FFprobe。完整材料测试需另行准备本地数据。
 
 ```bash
-PYTHONPATH=src uv run pytest -q \
-  tests/test_eval.py tests/test_tracking.py tests/test_time_alignment.py \
-  tests/test_roi.py tests/test_visual_review_helpers.py
+PYTHONPATH=src uv run --locked pytest -q -m 'not local_data'
 ```
+
+GitHub Actions 在推送和 PR 时运行上述完整公开集合，不再只挑选五个测试文件。
+测试分层、轻量 CI 环境和本地全量命令见 [回归测试与 CI](docs/阶段0-1/回归测试与CI.md)。
+`local_data` 只控制显式测试选择；直接运行全套测试时，缺少本地材料仍会失败，不会静默跳过。
 
 完整测试、真实视频验证、图片哈希复核和历史 CUDA 实验还需要本地源视频、模型、原尺寸
 图片、上游固定提交及实验产物。它们没有随本次 GitHub 同步上传；不要把克隆后的缺失材料
