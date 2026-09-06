@@ -94,6 +94,14 @@ services/inference/tests/    service contract tests
 
 VolleyMole is an early v1 scaffold. The next implementation milestones are local model integration and an editable rally-review workflow.
 
+### Independent stage 0/1 engine
+
+An independent analysis engine is available under `src/volleycut`, with root-level Python dependencies, tests, and source-image review utilities. It has not been connected to the UI or the existing HTTP service.
+
+See [the engine guide](README_ENGINE.md) for its separate Python 3.12 environment and CLI, and [the local-data guide](docs/阶段0-1/数据与复现说明.md) for data preparation and reproducibility limits. User media, annotation files, dataset manifests, video fingerprints, experiment reports, model weights, and credentials are not published.
+
+Validation-set freezing, the independent quality baseline, acceptance configuration, and measured user time savings all remain **unpassed**. This source/documentation upload does not approve later product stages.
+
 ## 📄 License
 
 [MIT](LICENSE)
