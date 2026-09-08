@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/brand/volleymole-logo.png" alt="VolleyMole" width="1000">
+  <img src="docs/brand/volleymole-logo.svg" alt="VolleyMole" width="1000">
 </p>
 
 <h1 align="center">🏐 VolleyMole</h1>
