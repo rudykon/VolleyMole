@@ -2,6 +2,10 @@
 
 输入固定或轻微抖动机位的 MP4 / MOV / AVI，自动分析整场，输出 720×1280、30 fps、H.264/AAC 的五佳或十佳。画面采用跟球细节与全场小画面，保留现场声，按第 K 名至第 1 名倒计时播放。没有原声的输入补静音轨以保持拼接一致。
 
+默认 `--style lively` 使用橙黄、薄荷绿、珊瑚粉标题与入场动效；4 秒片头由五段各 0.8 秒的精彩镜头快切组成。每个完整回合后，重播已评审动作关键帧附近约 2 秒的源画面，以 2/3 速播放约 3 秒，音频同步降速而不改变音高。回合间插入 0.4 秒斜向擦除连接动画及轻提示音，不裁去回合动作。可用 `--style classic` 生成第一版样式；两种成片、片段和报告分别保存。
+
+活泼标题只改表达方式，不添加未经确认的得分或胜负。回放中心沿用已被视觉模型评审的动作峰值关键帧；短回合会缩短回放源窗口，所有预告与回放都限定在该回合剪辑范围内。
+
 ## 准备与运行
 
 编排器需要 Python 3.10+、NumPy、PATH 中的 FFmpeg/FFprobe，当前使用 Linux 文件锁。安装编排器依赖：
@@ -83,8 +87,13 @@ python tools/volleyball-top-plays/run_match.py --video match.mp4 --rerun-from ra
 - `edit_decision.json`：排名、标题、解释、安全剪辑点、所有未入选原因。
 - `clips/`、`top5.mp4` 或 `top10.mp4`：逐回合视频与合集。
 - `state.json`、日志、`render_report.json`、`verification.json`：阶段状态、错误、渲染和完整解码校验。
+- `clips_lively/`、`extras_lively/`、`top5_lively.mp4` 或 `top10_lively.mp4`：活力版完整回合、预告/回放/转场与合集，不覆盖原版。
+- `render_report_lively.json`：逐段源时间、播放速率、成片位置和类型；`verification_lively.json`、`alignment_verification_lively.json` 保存完整解码及画面/声音对齐检查。
+- `timing_lively.json`：最近一次实际制作耗时；`timing_latest.json`：最近一次命令耗时；`timings/` 保留每次记录。
 
 每阶段完成后原子写入状态，哈希匹配才复用。中断或失败后重复同一命令即可；成功步骤保留，失败步骤重试。少于 K 个有效回合会明确失败，不复制片段凑数量。`--stop-after manifest` 或 `--stop-after rank` 可检查中间结果。
+
+计时采用墙钟时间，从命令启动至成片验证结束，包含源文件检查、哈希校验、实际执行阶段和最终验证。报告将当前缓存检查时间与历史推理时间分开；复用缓存的渲染时间不能当作首次全流程推理耗时。`--rerun-from render --style lively` 可单独重做并计时当前样式，不重复分析和排名。
 
 ## 验证
 
@@ -92,7 +101,7 @@ python tools/volleyball-top-plays/run_match.py --video match.mp4 --rerun-from ra
 python -m unittest discover -s tools/volleyball-top-plays/tests -v
 ```
 
-覆盖两种数量的决策约束、回合分割、源时间错位、缺帧、持球排除、号码低置信度处理、API 无效返回和错误降级、缺失产物与中断恢复。每次正式成片后自动完整解码合集及全部片段，检查分辨率、音视频起止、时长和排名数。
+覆盖两种数量的决策约束、回合分割、源时间错位、缺帧、持球排除、号码低置信度处理、API 无效返回和错误降级、缺失产物与中断恢复，以及快切/回放时间范围、完整回合保留和本次计时。每次正式成片后自动完整解码合集及全部片段，检查分辨率、音视频起止、时长和排名数，并对照源画面及原声波形。
 
 实际编码的故障注入测试（生成短小的合成十佳，不调用外部 API）：
 
@@ -105,11 +114,13 @@ python tools/volleyball-top-plays/tests/render_fixture.py \
 
 它仅模拟 API 传输断网，其余降级决策、静音音轨、缺少球轨迹时的居中构图、十段合并和完整解码都实际运行。
 
-正式成片还可独立对照源画面和原声波形，结果保存为 `alignment_verification.json`：
+测试新版效果时添加 `--style lively`，并将输出目录改为 `runs/verification/lively-top10`。
+
+正式成片也可单独重复对照源画面和原声波形，活力版结果保存为 `alignment_verification_lively.json`：
 
 ```bash
 tools/fast-volleyball-tracking-inference/.venv/bin/python \
-  tools/volleyball-top-plays/check_alignment.py --run runs/1-top5
+  tools/volleyball-top-plays/check_alignment.py --run runs/1-top5 --style lively
 ```
 
 第三方模型与源码按各自许可证独立安装，本仓库不重新分发权重。尤其 `volleyball_analytics` 的 GPL 许可证需在部署和分发时按上游原文处理；本编排器仅调用本地检出。

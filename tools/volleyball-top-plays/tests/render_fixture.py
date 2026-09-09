@@ -10,7 +10,7 @@ from common import APP, probe, read_json, save_json
 from ranker import rank, rule_decision
 
 
-def main(directory,python,api_failure=False):
+def main(directory,python,api_failure=False,style='classic'):
     directory.mkdir(parents=True,exist_ok=True)
     source=directory/'synthetic.mp4'
     subprocess.run(['ffmpeg','-y','-v','error','-f','lavfi','-i','testsrc2=size=320x180:rate=30',
@@ -40,13 +40,14 @@ def main(directory,python,api_failure=False):
     else:
         decision=rule_decision(rallies,10);decision['ranking_mode']='synthetic_fixture'
         save_json(directory/'edit_decision.json',decision)
-    subprocess.run([python,str(APP/'media_worker.py'),'render','--run',str(directory)],check=True)
+    subprocess.run([python,str(APP/'media_worker.py'),'render','--run',str(directory),'--style',style],check=True)
     from run_match import verify
-    verify(directory,10)
+    verify(directory,10,style)
     print('十段实际渲染、无音频、缺失轨迹居中降级：通过'+('；API 故障注入后自动成片：通过' if api_failure else ''))
 
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--output',type=Path,required=True);p.add_argument('--python',required=True)
     p.add_argument('--api-failure',action='store_true')
-    args=p.parse_args();main(args.output.resolve(),args.python,args.api_failure)
+    p.add_argument('--style',choices=['classic','lively'],default='classic')
+    args=p.parse_args();main(args.output.resolve(),args.python,args.api_failure,args.style)

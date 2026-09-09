@@ -77,13 +77,17 @@ class Stages:
         self.directory = Path(directory)
         self.path = self.directory/'state.json'
         self.data = read_json(self.path) if self.path.exists() else {'version': 1, 'stages': {}}
+        self.current_run = []
 
     def execute(self, name, signature, callback):
+        observed_begin = time.monotonic()
         key = hashlib.sha256(json.dumps(signature, sort_keys=True).encode()).hexdigest()
         old = self.data['stages'].get(name, {})
         if old.get('status') == 'complete' and old.get('signature') == key:
             if all(Path(p).is_file() and digest(p) == h for p, h in old.get('artifacts', {}).items()) and old.get('artifacts'):
                 print(f'[{name}] 复用已验证结果', flush=True)
+                self.current_run.append({'stage':name,'status':'reused',
+                    'elapsed_sec':round(time.monotonic()-observed_begin,3)})
                 return old['result']
         begin = time.monotonic()
         entry = {'status': 'running', 'signature': key, 'started_at': time.time()}
@@ -100,5 +104,7 @@ class Stages:
         finally:
             entry['elapsed_sec'] = round(time.monotonic()-begin, 3)
             save_json(self.path, self.data)
+            self.current_run.append({'stage':name,'status':entry['status'],
+                'elapsed_sec':round(time.monotonic()-observed_begin,3)})
         print(f'[{name}] 完成 ({entry["elapsed_sec"]:.1f}s)', flush=True)
         return result

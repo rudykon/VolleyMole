@@ -25,10 +25,12 @@ def audio_alignment(original,rendered):
     return {'status':'checked','lag_ms':float(lags[idx]/16),'correlation':float(cc[idx]/(np.linalg.norm(x)*np.linalg.norm(y)))}
 
 
-def check(directory):
-    source=read_json(directory/'match_manifest.json')['source'];report=read_json(directory/'render_report.json')
+def check(directory,style='classic'):
+    suffix='_lively' if style=='lively' else ''
+    source=read_json(directory/'match_manifest.json')['source'];report=read_json(directory/f'render_report{suffix}.json')
     results=[];offset=0.
     for clip in report['clips']:
+        offset=clip.get('timeline_start_sec',offset)
         samples=[]
         for relative in (.5,clip['duration_sec']/2,clip['duration_sec']-1.):
             src=frame_at(source['path'],clip['source_start_sec']+relative,720)
@@ -52,11 +54,34 @@ def check(directory):
                 if abs(d['lag_ms'])>80 or (d['correlation'] is not None and d['correlation']<.75):
                     raise ValueError(f'原声匹配失败：{clip["rank"]}, {kind}, {d}')
         results.append({'rank':clip['rank'],'video_samples':samples,'audio_samples':audio});offset+=clip['duration_sec']
-    save_json(directory/'alignment_verification.json',{'status':'passed','method':'source overview pixel comparison and source audio cross-correlation',
-              'video_samples_per_clip':3,'audio_windows_per_clip':2,'results':results})
+    effects=[]
+    for segment in report.get('segments',[]):
+        if segment['kind'] not in ('replay','teaser'):continue
+        samples=[]
+        for relative in (segment['duration_sec']*.25,segment['duration_sec']*.65):
+            when=segment['source_start_sec']+relative*segment['playback_rate']
+            original=frame_at(source['path'],when,720)
+            combined=frame_at(report['output'],segment['timeline_start_sec']+relative,720)
+            target=cv2.resize(original,(720,405),interpolation=cv2.INTER_AREA)
+            # Exclude the teaser footer as well as the full-court caption.
+            error=float(np.mean(abs(combined[910:1165].astype(float)-target[35:290].astype(float))))
+            if error>12:raise ValueError(f'快切/慢回放源画面或时间映射错误：{segment["index"]}')
+            samples.append({'relative_sec':relative,'source_sec':when,'overview_mean_abs_error':error})
+        # The composed audio must match the already time-stretched effect clip.
+        # This verifies timeline placement, while the renderer stretches both
+        # source streams by the same explicitly recorded playback_rate.
+        length=min(1.,segment['duration_sec']-.12)
+        a=audio_alignment(audio_at(segment['path'],.06,length),audio_at(report['output'],segment['timeline_start_sec']+.06,length))
+        if abs(a['lag_ms'])>80 or (a['correlation'] is not None and a['correlation']<.75):
+            raise ValueError('快切/回放在合集中的原声偏移')
+        effects.append({'kind':segment['kind'],'rank':segment['rank'],'playback_rate':segment['playback_rate'],
+                        'video_samples':samples,'compilation_audio':a})
+    save_json(directory/f'alignment_verification{suffix}.json',{'status':'passed','method':'source overview pixel comparison and source audio cross-correlation',
+              'video_samples_per_clip':3,'audio_windows_per_clip':2,'results':results,'effects':effects})
     print('源画面与原声内容对齐校验通过')
 
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--run',type=Path,required=True)
-    check(p.parse_args().run.resolve())
+    p.add_argument('--style',choices=['classic','lively'],default='classic')
+    args=p.parse_args();check(args.run.resolve(),args.style)

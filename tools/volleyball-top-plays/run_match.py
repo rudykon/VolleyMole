@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
+from datetime import datetime, timezone
 from common import APP, ROOT, Stages, digest, functions_digest, identity, probe, read_json, run, save_json
 from adapters import ANALYTICS, TRACK, PLAYER, discover, ingest_analytics, ingest_tracking, ingest_player
 from rally import build_manifest
@@ -14,14 +16,18 @@ from ranker import rank
 from schemas import validate_decision
 
 
-def verify(directory, top_k):
+def verify(directory, top_k, style='classic', alignment_python=None):
+    suffix='_lively' if style=='lively' else ''
     manifest=read_json(directory/'match_manifest.json');decision=read_json(directory/'edit_decision.json')
     validate_decision(decision,manifest,directory,top_k)
-    render=read_json(directory/'render_report.json')
+    render=read_json(directory/f'render_report{suffix}.json')
     if len(render['clips'])!=top_k or [c['rank'] for c in render['clips']]!=list(range(top_k,0,-1)):
         raise ValueError('成片回合数量或播放顺序错误')
+    if style=='lively':
+        from presentation import validate_timeline
+        validate_timeline(render,decision)
     reports=[]
-    for item in render['clips']+[{'path':render['output'],'duration_sec':render['expected_duration_sec']}]:
+    for item in render.get('segments',render['clips'])+[{'path':render['output'],'duration_sec':render['expected_duration_sec']}]:
         path=Path(item['path'])
         data=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_streams','-show_format','-of','json',str(path)]))
         video=next(s for s in data['streams'] if s['codec_type']=='video')
@@ -36,18 +42,24 @@ def verify(directory, top_k):
         duration_error=abs(float(video['duration'])-item['duration_sec'])
         if av_delta>.12 or duration_error>.12 or av_start_delta>.08:
             raise ValueError(f'音视频时间校验失败：{path.name}')
-        log=directory/'verification'/f'{path.stem}.log'
+        log=directory/f'verification{suffix}'/f'{path.stem}.log'
         run(['ffmpeg','-v','error','-xerror','-i',path,'-f','null','-'],log)
         reports.append({'path':str(path),'sha256':digest(path),'duration_sec':float(video['duration']),
                         'av_duration_delta_sec':av_delta,'av_start_delta_sec':av_start_delta,
                         'duration_error_sec':duration_error,'full_decode':'passed','frames':int(video['nb_frames'])})
     report={'status':'passed','top_k':top_k,'videos':reports,'source_has_audio':manifest['source']['has_audio'],
             'ranking_mode':decision['ranking_mode'],'note':'完整解码与时间轴校验不等于语义识别准确率。'}
-    save_json(directory/'verification.json',report)
-    return str(directory/'verification.json'),[directory/'verification.json']
+    save_json(directory/f'verification{suffix}.json',report)
+    artifacts=[directory/f'verification{suffix}.json']
+    if alignment_python:
+        run([alignment_python,APP/'check_alignment.py','--run',directory,'--style',style],directory/f'alignment{suffix}.log')
+        artifacts.append(directory/f'alignment_verification{suffix}.json')
+    return str(directory/f'verification{suffix}.json'),artifacts
 
 
 def main():
+    invocation_begin=time.perf_counter()
+    started_at=datetime.now(timezone.utc).isoformat()
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--video',type=Path,required=True)
     parser.add_argument('--top-k',type=int,choices=(5,10),default=5)
@@ -69,9 +81,12 @@ def main():
     parser.add_argument('--api-timeout',type=float,default=240)
     parser.add_argument('--llm-config',type=Path,default=ROOT/'llm_api.json',help='读取 llm 节点；rank 节点为文本 reranker，不用于生成剪辑单')
     parser.add_argument('--font',default='/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc')
+    parser.add_argument('--style',choices=['classic','lively'],default='lively',help='lively：彩色标题、4秒快切片头、短慢回放及连接动画；classic：原版')
     parser.add_argument('--stop-after',choices=['manifest','rank','render'],default='render')
     parser.add_argument('--rerun-from',choices=['analytics','tracking','player','rallies','previews','rank','render','verify'])
     args=parser.parse_args()
+    suffix='_lively' if args.style=='lively' else ''
+    render_stage='render'+suffix;verify_stage='verify'+suffix
     if args.llm_config.is_file():
         llm=read_json(args.llm_config).get('llm',{})
         if llm.get('provider') not in (None,'openai_compatible'):
@@ -100,9 +115,29 @@ def main():
     meta=probe(video);meta['identity']=identity(video)
     code={str(p.relative_to(APP)):digest(p) for p in APP.glob('*.py')}
     stages=Stages(directory)
+    def finish_timing(output=None):
+        total=time.perf_counter()-invocation_begin
+        reused=[r['stage'] for r in stages.current_run if r['status']=='reused']
+        data={'started_at_utc':started_at,'finished_at_utc':datetime.now(timezone.utc).isoformat(),
+              'style':args.style,'source_duration_sec':meta['duration_sec'],'total_elapsed_sec':round(total,3),
+              'stages':stages.current_run,'reused_stages':reused,
+              'preparation_and_bookkeeping_sec':round(max(0,total-sum(r['elapsed_sec'] for r in stages.current_run)),3),
+              'output':str(output) if output else None,
+              'scope_note':'本次命令墙钟耗时，包含输入检查、缓存校验、实际执行阶段及成片校验；不包含开发调试。复用的历史推理/API耗时不计入本次。',
+              'upstream_modes':{name:read_json(directory/name/'provenance.json').get('mode','optional') for name in ('analytics','tracking','player') if (directory/name/'provenance.json').exists()}}
+        if output:
+            rendered=read_json(directory/f'render_report{suffix}.json')
+            data['output_duration_sec']=rendered['expected_duration_sec']
+            if render_stage not in reused:data['render_breakdown_sec']=rendered.get('render_timing_sec')
+        tag=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+        save_json(directory/'timings'/f'{tag}-{args.style}.json',data)
+        save_json(directory/'timing_latest.json',data)
+        if output and render_stage not in reused:save_json(directory/f'timing{suffix}.json',data)
+        print(f'本次命令耗时：{total:.2f} 秒；复用阶段：{", ".join(reused) or "无"}',flush=True)
     if args.rerun_from:
-        order=['analytics','tracking','player','rallies','previews','rank','render','verify']
-        for name in order[order.index(args.rerun_from):]:
+        order=['analytics','tracking','player','rallies','previews','rank',render_stage,verify_stage]
+        target={'render':render_stage,'verify':verify_stage}.get(args.rerun_from,args.rerun_from)
+        for name in order[order.index(target):]:
             stages.data['stages'].pop(name,None)
         save_json(stages.path,stages.data)
     cached={} if args.no_cache_discovery else discover(video,meta['frame_count'])
@@ -128,7 +163,7 @@ def main():
         return str(directory/'match_manifest.json'),files
     manifest_path=stages.execute('rallies',{'analytics':digest(analytics),'tracking':digest(tracking),'pts':digest(directory/'tracking/source_pts.csv'),
                                 'player':digest(player),'config':config,'code':code['rally.py'],'source':meta},make_manifest)
-    if args.stop_after=='manifest':return
+    if args.stop_after=='manifest':finish_timing();return
     manifest=read_json(manifest_path)
     def make_previews():
         run([args.tracking_python,APP/'media_worker.py','previews','--run',directory],directory/'previews.log')
@@ -142,15 +177,17 @@ def main():
                             'code':code['ranker.py'],'schema':code['schemas.py'],'semantic':code['semantic.py'],'vision_model':args.vision_model,
                             'prompt':digest(APP/'prompts/rank_top_plays.md'),'vision_prompt':digest(APP/'prompts/review_frames.md')},
                             lambda:rank(manifest,directory,args.top_k,args.focus_player,args.ranker,args.api_base,args.model,args.api_timeout,args.vision_model))
-    if args.stop_after=='rank':return
+    if args.stop_after=='rank':finish_timing();return
     def make_video():
-        run([args.tracking_python,APP/'media_worker.py','render','--run',directory,'--font',args.font],directory/'render.log')
-        report=read_json(directory/'render_report.json')
-        return report['output'],[report['output'],directory/'render_report.json']+[c['path'] for c in report['clips']]
-    output=stages.execute('render',{'decision':digest(decision),'manifest':digest(manifest_path),'code':code['media_worker.py'],
+        run([args.tracking_python,APP/'media_worker.py','render','--run',directory,'--font',args.font,'--style',args.style],directory/f'render{suffix}.log')
+        report=read_json(directory/f'render_report{suffix}.json')
+        return report['output'],[report['output'],directory/f'render_report{suffix}.json']+[c['path'] for c in report.get('segments',report['clips'])]
+    output=stages.execute(render_stage,{'decision':digest(decision),'manifest':digest(manifest_path),'code':code['media_worker.py'],
+                          'presentation':code['presentation.py'],'style':args.style,
                           'schema':code['schemas.py'],'font':identity(args.font)},make_video)
-    stages.execute('verify',{'output':digest(output),'decision':digest(decision),'report':digest(directory/'render_report.json'),
-                             'code':code['run_match.py']},lambda:verify(directory,args.top_k))
+    stages.execute(verify_stage,{'output':digest(output),'decision':digest(decision),'report':digest(directory/f'render_report{suffix}.json'),
+                             'code':code['run_match.py'],'alignment':code['check_alignment.py']},lambda:verify(directory,args.top_k,args.style,args.tracking_python))
+    finish_timing(output)
     print(f'VolleyMole 成片：{output}',flush=True)
 
 

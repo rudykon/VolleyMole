@@ -32,7 +32,7 @@ def previews(directory):
     save_json(directory/'previews/index.json',{'files':outputs})
 
 
-def render_clip(directory, item, manifest, font_path, center_only=False):
+def render_clip(directory, item, manifest, font_path, center_only=False, style='classic'):
     sys.path.insert(0,str(ROOT/'tools/fast-volleyball-tracking-inference/src'))
     from make_reels import smooth_values, crop_frame
     r=next(r for r in manifest['rallies'] if r['rally_id']==item['rally_id'])
@@ -57,10 +57,10 @@ def render_clip(directory, item, manifest, font_path, center_only=False):
         centers=centers*(1-blend)+(w/2)*blend
         # Limit camera acceleration through a second low-pass pass.
         centers=smooth_values(centers,'moving_avg',9,2)[:frames]
-    out=directory/'clips'/f"rank_{item['rank']:02d}.mp4"
+    out=directory/('clips_lively' if style=='lively' else 'clips')/f"rank_{item['rank']:02d}.mp4"
     out.parent.mkdir(exist_ok=True)
     temp=out.with_name(out.stem+'.tmp.mp4')
-    log=directory/'clips'/f"rank_{item['rank']:02d}.log"
+    log=out.with_suffix('.log')
     header_h,detail_h,overview_h=110,765,405
     # The inset keeps all players visible even when the detail crop follows a ball.
     font=ImageFont.truetype(str(font_path),32)
@@ -75,6 +75,10 @@ def render_clip(directory, item, manifest, font_path, center_only=False):
     draw.text((134,18),title,font=font,fill='white')
     draw.text((135,65),'VOLLEYMOLE  /  日常排球五佳球' if len(read_json(directory/'edit_decision.json')['selected'])==5 else 'VOLLEYMOLE  /  日常排球十佳球',font=small,fill=(169,187,207))
     header_array=cv2.cvtColor(np.asarray(header),cv2.COLOR_RGB2BGR)
+    lively=None
+    if style=='lively':
+        from presentation import lively_headers
+        lively=lively_headers(item,font_path,len(read_json(directory/'edit_decision.json')['selected']))
     # Use a top-anchored court detail to discard empty foreground floor. The full
     # original frame is always available in the inset immediately below it.
     detail_source_h=min(h,max(int(.68*h),int(np.percentile(samples[:,2],95)+.3*h) if samples.size else h))
@@ -100,13 +104,15 @@ def render_clip(directory, item, manifest, font_path, center_only=False):
                 data=decoder.stdout.read(w*h*3)
                 if len(data)!=w*h*3: raise ValueError(f'片段视频提前结束：{i}/{frames}')
                 frame=np.frombuffer(data,np.uint8).reshape(h,w,3)
-                canvas=np.empty((1280,720,3),np.uint8);canvas[:header_h]=header_array
+                canvas=np.empty((1280,720,3),np.uint8)
+                canvas[:header_h]=lively[min(i,len(lively)-1)] if lively else header_array
                 crop=crop_frame(frame[:detail_source_h],int(centers[i]),crop_width,'none')
                 canvas[header_h:header_h+detail_h]=cv2.resize(crop,(720,detail_h),interpolation=cv2.INTER_AREA)
                 canvas[header_h+detail_h:]=cv2.resize(frame,(720,overview_h),interpolation=cv2.INTER_AREA)
-                cv2.rectangle(canvas,(0,header_h+detail_h),(720,header_h+detail_h+3),(54,190,248),-1)
+                accent=(199,231,85) if style=='lively' else (54,190,248)
+                cv2.rectangle(canvas,(0,header_h+detail_h),(720,header_h+detail_h+3),accent,-1)
                 cv2.putText(canvas,'FULL COURT',(16,header_h+detail_h+29),cv2.FONT_HERSHEY_SIMPLEX,.55,(255,255,255),1,cv2.LINE_AA)
-                cv2.rectangle(canvas,(0,1275),(round(720*(i+1)/frames),1279),(54,190,248),-1)
+                cv2.rectangle(canvas,(0,1275),(round(720*(i+1)/frames),1279),accent,-1)
                 encoder.stdin.write(canvas.tobytes());done+=1
             encoder.stdin.close()
             if decoder.wait()!=0 or encoder.wait()!=0: raise RuntimeError(f'渲染失败，见 {log}')
@@ -122,7 +128,10 @@ def render_clip(directory, item, manifest, font_path, center_only=False):
     return report
 
 
-def render(directory,font):
+def render(directory,font,style='classic'):
+    if style=='lively':
+        from presentation import render_lively
+        return render_lively(directory,font)
     manifest=read_json(directory/'match_manifest.json');decision=read_json(directory/'edit_decision.json')
     from schemas import validate_decision
     validate_decision(decision,manifest,directory,len(decision['selected']))
@@ -135,9 +144,15 @@ def render(directory,font):
             result=render_clip(directory,item,manifest,font,center_only=True)
             result['fallback_error']=type(exc).__name__
         clips.append(result)
+    output=directory/f'top{len(clips)}.mp4'
+    concatenate_segments(clips,output)
+    save_json(directory/'render_report.json',{'output':str(output),'order':'countdown','clips':clips,'expected_duration_sec':sum(r['duration_sec'] for r in clips)})
+
+
+def concatenate_segments(clips,output):
     # Decode and concatenate exact video/audio durations. Concatenating MP4
     # packets uses AAC-rounded container lengths and accumulates audio drift.
-    output=directory/f'top{len(clips)}.mp4';temp=output.with_name(output.stem+'.tmp.mp4')
+    temp=output.with_name(output.stem+'.tmp.mp4')
     command=['ffmpeg','-y','-v','error']
     filters=[]
     for i,clip in enumerate(clips):
@@ -150,7 +165,6 @@ def render(directory,font):
               '-c:a','aac','-b:a','192k','-movflags','+faststart',str(temp)]
     subprocess.run(command,check=True)
     temp.replace(output)
-    save_json(directory/'render_report.json',{'output':str(output),'order':'countdown','clips':clips,'expected_duration_sec':sum(r['duration_sec'] for r in clips)})
 
 
 if __name__=='__main__':
@@ -158,7 +172,8 @@ if __name__=='__main__':
     parser.add_argument('kind',choices=['previews','render'])
     parser.add_argument('--run',type=Path,required=True)
     parser.add_argument('--font',default=FONT)
+    parser.add_argument('--style',choices=['classic','lively'],default='classic')
     args=parser.parse_args();directory=args.run.resolve()
     cv2.setNumThreads(2)
     if args.kind=='previews':previews(directory)
-    else:render(directory,args.font)
+    else:render(directory,args.font,args.style)

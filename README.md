@@ -9,7 +9,9 @@ python tools/volleyball-top-plays/run_match.py \
   --video data/样例视频/1.mp4 --top-k 5
 ```
 
-输出 `runs/1-top5/top5.mp4`、五个独立片段、完整回合清单、剪辑决策及验证报告。重新运行同一命令会检查输入和产物哈希，并复用已完成步骤。
+默认输出活力版 `runs/1-top5/top5_lively.mp4`：彩色活泼标题、4 秒精彩快切片头、完整五佳回合、短慢回放和连接动画。保留现场原声，回放同步降速。原版 `top5.mp4` 不被覆盖，使用 `--style classic` 可生成原版样式。
+
+完整回合清单、剪辑决策、源时间线、验证报告和本次耗时都保存在运行目录。`timing_lively.json` 记录最近一次实际制作的总耗时及分阶段耗时，明确标记复用缓存；重复运行只校验缓存时，不覆盖这份制作时间记录。
 
 读取本地 `llm_api.json` 的 `llm` 配置，或使用 `VOLLEYMOLE_API_KEY`、`VOLLEYMOLE_API_BASE`、`VOLLEYMOLE_MODEL` 环境变量。只发送预筛候选的结构化统计及每回合最多三张缩小截图；原始整场视频不上传。API 不可用或决策不合法时保留错误分类并按规则导出。`--ranker rules` 完全关闭 API 请求。
 
