@@ -1,53 +1,17 @@
-node_modules/
-dist/
-.vite/
-*.tsbuildinfo
-vite.config.js
-vite.config.d.ts
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.venv/
-.env
-.env.*
+# Local-only material and credentials
 github_token.json
-*token*.json
-*credentials*.json
-*.pem
-*.key
-*.mp4
-*.MP4
-*.mov
-*.MOV
-*.mkv
-*.avi
-*.wav
-*.onnx
-*.pt
-*.pth
-*.safetensors
-outputs/
-runs/
-.volleycut-analysis.lock
 .agents/
 .codex/
+data/
+runs/
+outputs/
 
-# Keep all local data, annotation records and material manifests out of Git.
-/data/
-
-# Upload experiment source scripts only, never reports or generated artifacts.
-/experiments/**
-!/experiments/stage0/
-!/experiments/stage1/
-!/experiments/stage0/*.py
-!/experiments/stage0/*.sh
-!/experiments/stage1/*.py
-
-# Third-party checkouts and weights remain local; preserve required notices.
-/tools/*
-!/tools/fast-volleyball-tracking-inference/
-/tools/fast-volleyball-tracking-inference/*
-!/tools/fast-volleyball-tracking-inference/LICENSE
-!/tools/basketball-shot-clipper/
-/tools/basketball-shot-clipper/*
-!/tools/basketball-shot-clipper/LICENSE
+# Third-party source checkouts, models and virtual environments stay local.
+# Preserve the license notices already tracked by this repository.
+tools/*
+!tools/fast-volleyball-tracking-inference/
+tools/fast-volleyball-tracking-inference/*
+!tools/fast-volleyball-tracking-inference/LICENSE
+!tools/basketball-shot-clipper/
+tools/basketball-shot-clipper/*
+!tools/basketball-shot-clipper/LICENSE
