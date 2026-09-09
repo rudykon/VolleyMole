@@ -1,5 +1,6 @@
 # Local-only material and credentials
 github_token.json
+llm_api.json
 .agents/
 .codex/
 data/
@@ -15,3 +16,11 @@ tools/fast-volleyball-tracking-inference/*
 !tools/basketball-shot-clipper/
 tools/basketball-shot-clipper/*
 !tools/basketball-shot-clipper/LICENSE
+
+# VolleyMole's orchestrator is first-party source.
+!tools/volleyball-top-plays/
+tools/volleyball-top-plays/.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
