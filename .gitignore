@@ -1,41 +1,51 @@
-# Local-only material and credentials
+# Local credentials (examples are safe to publish)
 github_token.json
 llm_api.json
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local workspaces, upstream checkouts and generated results
 .agents/
 .codex/
+tools/
 data/
+models/
 runs/
 outputs/
 
-# Third-party source checkouts, models and virtual environments stay local.
-# Preserve the license notices already tracked by this repository.
-tools/*
-!tools/fast-volleyball-tracking-inference/
-tools/fast-volleyball-tracking-inference/*
-!tools/fast-volleyball-tracking-inference/LICENSE
-!tools/basketball-shot-clipper/
-tools/basketball-shot-clipper/*
-!tools/basketball-shot-clipper/LICENSE
-
-# VolleyMole's orchestrator is first-party source.
-!tools/volleyball-top-plays/
-tools/volleyball-top-plays/.venv/
+# Python environments, build output and caches
+.venv/
+venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.env
-.venv/
-models/
+.ruff_cache/
+.coverage
+htmlcov/
 dist/
 build/
 *.egg-info/
 .uv-cache/
-# Guard against accidentally placing large local weights/media outside their stores.
+
+# Models and match media placed outside the usual directories
 *.pt
 *.pth
 *.onnx
 *.safetensors
+*.engine
+*.plan
 *.mp4
 *.mov
 *.MOV
 *.avi
+*.mkv
+*.webm
+
+# Editor / OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

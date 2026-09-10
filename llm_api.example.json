@@ -1,0 +1,8 @@
+{
+  "llm": {
+    "provider": "openai_compatible",
+    "base_url": "https://your-provider.example/v1",
+    "model": "your-vision-model",
+    "api_key": ""
+  }
+}

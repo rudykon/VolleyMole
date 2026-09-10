@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "volleymole"
 version = "0.2.0"
 description = "PTS-based, resumable volleyball top-five/top-ten editing"
+readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "numpy==2.3.5", "opencv-python-headless==4.13.0.92",
@@ -16,6 +17,11 @@ dependencies = [
 
 [project.scripts]
 volleymole = "volleymole.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/rudykon/VolleyMole"
+Repository = "https://github.com/rudykon/VolleyMole"
+Issues = "https://github.com/rudykon/VolleyMole/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
