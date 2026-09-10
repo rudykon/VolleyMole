@@ -1,0 +1,28 @@
+{
+  "volleyball-ml-models": {
+    "repository": "https://github.com/masouduut94/volleyball-ml-models",
+    "commit": "2374bfd859d6a03c78780d0aa1bae3d3a30dea83",
+    "license": "volleyball-ml-models-MIT.txt",
+    "incorporated_module": "state_model.py",
+    "original_file": "models/GameStatusClassifierModule.py",
+    "local_source_sha256": "5ba4b72cff8beb76d5bea74db117e9cd7992dd6d62ced1aae60307c4298be737",
+    "local_changes": "Strict loading before integration; package adaptation removes UI/logging, propagates errors, retains probabilities and uses CPU FP32."
+  },
+  "fast-volleyball-tracking-inference": {
+    "repository": "https://github.com/asigatchov/fast-volleyball-tracking-inference",
+    "commit": "637c217b6589be50eba77687d3f5fa5ca103c175",
+    "license": "tracking-MIT.txt",
+    "incorporated_modules": ["vball_primitives.py", "tracker.py", "camera.py"],
+    "local_sources": {
+      "src/inference_onnx_seq_gray_v2.py": "4c2620efea136e87bb3c0d90c1834076edf7fe49068873741de613f738936e7b",
+      "src/make_reels.py": "2cb5421f01bb57a16304dd11f6fa5686ab085a80e525b03483153078e81f096a"
+    },
+    "local_changes": "Includes pre-integration tail alignment and camera fixes; removes external decoding/path injection/UI; adds PTS packet input, confidence and backend proof."
+  },
+  "jersey": {
+    "implementation": "Independently implemented in VolleyMole; no volleyball-highlights source incorporated.",
+    "library": "EasyOCR (Apache-2.0), installed separately",
+    "weights": "Not bundled; see model_manifest.json"
+  },
+  "distribution_note": "MIT notices apply only to incorporated source. Ultralytics is an AGPL dependency; model weights and the user logo are not relicensed. See repository THIRD_PARTY.md before distribution."
+}

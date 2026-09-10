@@ -1,0 +1,23 @@
+{
+  "mode": "built-in image_gen",
+  "assets": [
+    {
+      "name": "volley_ball",
+      "file": "volley_ball.png",
+      "prompt": "Use case: illustration-story. Asset type: professional editorial sports sticker, used in a vertical amateur volleyball highlight video header and interstitial title card. Primary request: one dynamic yellow-and-cream volleyball in flight, with a mint and coral swoosh and a few expressive ink motion marks, no face. Style: premium contemporary hand-drawn sports editorial illustration, bold imperfect ink contour, subtle screenprint grain, thoughtfully balanced graphic silhouette, energetic but not childish clip art. Palette: deep navy #0D1628, cream #FFF6DF, warm yellow #FFC646, mint #55E7C7, restrained coral #FF738E; matches the existing video design. Composition: a single centered cutout, generous clear padding, entire illustration visible. Background: genuinely transparent alpha background, no solid rectangle or checkerboard. No words, no letters, no digits, no ranking symbols, no logos, no watermark. Square PNG artwork.",
+      "source_path": "/home/wangrj/.codex/generated_images/01a08572-3abd-7370-8483-d7e1a9f9bccc/exec-5beed6f7-f3dc-4df7-88b9-5388f06dc7d1.png"
+    },
+    {
+      "name": "volley_save",
+      "file": "volley_save.png",
+      "prompt": "Use case: illustration-story. Asset type: professional editorial sports illustration for a volleyball video transition card and small header sticker. Primary request: one adult recreational volleyball player making a committed low forearm dig, one knee close to the floor, arms joined naturally, following an airborne volleyball; full body and ball visible. Gender-neutral adult athletic figure in a cream sports tee, mint shorts, knee pads and sneakers, no jersey number. Style: premium contemporary hand-drawn sports editorial illustration, bold imperfect deep navy ink contour, subtle screenprint grain, confident anatomy, dynamic diagonal movement, energetic but not childish mascot art. Palette: deep navy #0D1628, cream #FFF6DF, warm yellow #FFC646, mint #55E7C7, restrained coral #FF738E. Composition: single centered cutout with a small purposeful motion swoosh, generous margins, no cropped limbs. Background: genuinely transparent alpha background, no solid rectangle or checkerboard. No text, no letters, no digits, no logos, no watermark. Square PNG artwork.",
+      "source_path": "/home/wangrj/.codex/generated_images/01a08572-3abd-7370-8483-d7e1a9f9bccc/exec-a2d5f05e-ab76-425e-ad03-f4dfc8b70f16.png"
+    },
+    {
+      "name": "volley_set",
+      "file": "volley_set.png",
+      "prompt": "Use case: illustration-story. Asset type: professional editorial sports illustration for a volleyball video transition card and small header sticker. Primary request: one adult recreational volleyball player in a balanced overhead setting pose, both hands naturally poised above the forehead under an airborne volleyball, full body visible, with a short subtle suggestion of a volleyball net behind the player. Gender-neutral athletic adult in a cream tee, coral shorts and sneakers, no jersey number. Style: premium contemporary hand-drawn sports editorial illustration, bold imperfect deep navy ink contour, subtle screenprint grain, confident plausible anatomy, expressive elegant movement, energetic but not childish clip art. Palette: deep navy #0D1628, cream #FFF6DF, warm yellow #FFC646, mint #55E7C7, restrained coral #FF738E. Composition: single centered cutout, generous margins, no cropped limbs, tiny purposeful motion marks. Background: genuinely transparent alpha background, no solid rectangle or checkerboard. No text, no letters, no digits, no ranking symbols, no logos, no watermark. Square PNG artwork.",
+      "source_path": "/home/wangrj/.codex/generated_images/01a08572-3abd-7370-8483-d7e1a9f9bccc/exec-afbaaa85-82ab-4033-b962-52d1340ca971.png"
+    }
+  ]
+}

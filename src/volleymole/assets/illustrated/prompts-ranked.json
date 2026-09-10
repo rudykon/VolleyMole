@@ -1,0 +1,29 @@
+{
+  "mode": "built-in image_gen",
+  "assets": [
+    {
+      "name": "rank_ribbon",
+      "file": "rank_ribbon.png",
+      "prompt": "Use case: stylized-concept. Asset type: reusable illustrated ranking plaque for volleyball video headings and full-screen transitions. Primary request: a wide horizontal cream paper ribbon with a thick playful navy ink outline, mint and coral folded ends, and one small yellow volleyball tucked at the outer left end. Composition: 3:1 landscape asset, clean flat pale cream center taking at least 70 percent of the width and 55 percent of the height, genuinely empty center for Chinese ranking text added later in code, minimal graphic flourishes only at the outer edges, generous padding. Style/medium: premium contemporary hand-drawn sports editorial illustration, confident imperfect deep navy ink contour and subtle screenprint grain, energetic and professional, not childish clip art. Color palette: deep navy #0D1628, cream #FFF6DF, warm yellow #FFC646, mint #55E7C7, restrained coral #FF738E; matches the existing volleyball video design. Background: genuinely transparent alpha, no solid rectangle, no checkerboard. Constraints: no text, no letters, no digits, no logos, no watermark. Entire artwork visible with clear margins.",
+      "source_path": "/home/wangrj/.codex/generated_images/01a08572-3abd-7370-8483-d7e1a9f9bccc/exec-e184ab5a-abb1-424f-a984-09354423294b.png"
+    },
+    {
+      "name": "volley_dive",
+      "file": "volley_dive.png",
+      "prompt": "Use case: illustration-story. Asset type: volleyball highlight transition and header sticker. Subject: one athletic adult diving low to save a volleyball, full body stretched diagonally in mid-dive, forearms together naturally reaching underneath the ball, focused facial expression, cream sports tee, coral shorts, knee pads and sneakers without jersey number. One small mint motion swoosh traces the committed diving action. Composition: single centered cutout, full body and ball clearly visible, anatomically plausible limbs, square artwork. Style/medium: premium contemporary hand-drawn sports editorial illustration, confident imperfect deep navy ink contour and subtle screenprint grain, energetic and professional, not childish clip art. Color palette: deep navy #0D1628, cream #FFF6DF, warm yellow #FFC646, mint #55E7C7, restrained coral #FF738E; matches the existing volleyball video design. Background: genuinely transparent alpha, no solid rectangle, no checkerboard. Constraints: no text, no letters, no digits, no logos, no watermark. Entire artwork visible with clear margins.",
+      "source_path": "/home/wangrj/.codex/generated_images/01a08572-3abd-7370-8483-d7e1a9f9bccc/exec-f9b89292-6d0d-42cc-a44f-70dfc87de41a.png"
+    },
+    {
+      "name": "volley_receive",
+      "file": "volley_receive.png",
+      "prompt": "Use case: illustration-story. Asset type: volleyball highlight transition and header sticker. Subject: one athletic adult in a strong low standing receive stance, feet wide apart and knees bent, both straight forearms together ready to bump the volleyball in front of the body, focused expression, mint sports jersey, navy shorts, knee pads and sneakers without jersey number. Composition: single centered cutout, full body and ball visible with a tiny coral motion stroke, anatomically plausible stance, square artwork. Style/medium: premium contemporary hand-drawn sports editorial illustration, confident imperfect deep navy ink contour and subtle screenprint grain, energetic and professional, not childish clip art. Color palette: deep navy #0D1628, cream #FFF6DF, warm yellow #FFC646, mint #55E7C7, restrained coral #FF738E; matches the existing volleyball video design. Background: genuinely transparent alpha, no solid rectangle, no checkerboard. Constraints: no text, no letters, no digits, no logos, no watermark. Entire artwork visible with clear margins.",
+      "source_path": "/home/wangrj/.codex/generated_images/01a08572-3abd-7370-8483-d7e1a9f9bccc/exec-3476aa3f-b4e0-4b4a-ba5b-1f3d9f0b6b0f.png"
+    },
+    {
+      "name": "volley_spike",
+      "file": "volley_spike.png",
+      "prompt": "Use case: illustration-story. Asset type: volleyball highlight transition and header sticker. Subject: one athletic adult volleyball attacker suspended in a powerful high jump, one hitting arm reaching up toward a yellow volleyball, other arm balancing, bent legs and complete body visible, cream sports jersey, mint shorts, knee pads and sneakers with no jersey number; a short understated segment of volleyball net makes the sport clear. Composition: single centered cutout with energetic diagonal motion, natural anatomy, square artwork. Style/medium: premium contemporary hand-drawn sports editorial illustration, confident imperfect deep navy ink contour and subtle screenprint grain, energetic and professional, not childish clip art. Color palette: deep navy #0D1628, cream #FFF6DF, warm yellow #FFC646, mint #55E7C7, restrained coral #FF738E; matches the existing volleyball video design. Background: genuinely transparent alpha, no solid rectangle, no checkerboard. Constraints: no text, no letters, no digits, no logos, no watermark. Entire artwork visible with clear margins.",
+      "source_path": "/home/wangrj/.codex/generated_images/01a08572-3abd-7370-8483-d7e1a9f9bccc/exec-94545888-3a92-434e-8616-5d9d4fa1e325.png"
+    }
+  ]
+}

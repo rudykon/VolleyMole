@@ -27,7 +27,7 @@ def main(directory,python,api_failure=False,style='classic'):
             'preview_frames':[f'previews/{rid}_{j}.jpg' for j in range(3)]})
     manifest={'source':meta,'rallies':rallies,'fixture':True,'config':{'preview_limit':25}}
     save_json(directory/'match_manifest.json',manifest)
-    subprocess.run([python,str(APP/'media_worker.py'),'previews','--run',str(directory)],check=True)
+    subprocess.run([python,'-m','volleymole.media_worker','previews','--run',str(directory)],check=True)
     if api_failure:
         # Inject only the transport failure; decision validation, fallback,
         # video encoding and full-decode verification run unmocked.
@@ -40,7 +40,7 @@ def main(directory,python,api_failure=False,style='classic'):
     else:
         decision=rule_decision(rallies,10);decision['ranking_mode']='synthetic_fixture'
         save_json(directory/'edit_decision.json',decision)
-    subprocess.run([python,str(APP/'media_worker.py'),'render','--run',str(directory),'--style',style],check=True)
+    subprocess.run([python,'-m','volleymole.media_worker','render','--run',str(directory),'--style',style],check=True)
     from run_match import verify
     verify(directory,10,style)
     print('十段实际渲染、无音频、缺失轨迹居中降级：通过'+('；API 故障注入后自动成片：通过' if api_failure else ''))

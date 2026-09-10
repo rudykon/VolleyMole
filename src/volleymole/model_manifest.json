@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "note": "Weights are not redistributed. Hashes pin the locally validated upstream artifacts, not a blanket license grant. See THIRD_PARTY.md.",
+  "models": {
+    "action": {
+      "path": "action.pt",
+      "bytes": 6290265,
+      "sha256": "bfd7f2354ff15c91839cbe987a069d5f04b2311d296989487c87fb04bddef109",
+      "download": "volleyball-core",
+      "member": "action/weights/best.pt"
+    },
+    "ball": {
+      "path": "ball.pt",
+      "bytes": 6836131,
+      "sha256": "3dffdc1dfe5e652cb3a217c0dde4b68f76b8f96e5897e7ab926c563df68a40ec",
+      "download": "volleyball-core",
+      "member": "ball/weights/best.pt"
+    },
+    "state_weights": {
+      "path": "state/model.safetensors",
+      "bytes": 344940412,
+      "sha256": "801b8d1fba0f139c2f2c2e64732831b8b642b4e382c496502142bef1fec8f7dc",
+      "download": "volleyball-core",
+      "member": "game_state/model.safetensors"
+    },
+    "state_config": {
+      "path": "state/config.json",
+      "bytes": 988,
+      "sha256": "1b6bb6dfa69cfa7c57f23666c4df35289b2825aa3943fe9fb1640a0f3e0e4971",
+      "download": "volleyball-core",
+      "member": "game_state/config.json"
+    },
+    "state_processor": {
+      "path": "state/preprocessor_config.json",
+      "bytes": 471,
+      "sha256": "2dad1f26b7123d6a7c5071a6098f63b43de668a5475b07ee9c7fa9071133f59f",
+      "download": "volleyball-core",
+      "member": "game_state/preprocessor_config.json"
+    },
+    "person": {
+      "path": "person.pt",
+      "bytes": 53164402,
+      "sha256": "61921abe1f2ed930bf28328a16b3162278cdb239a1e8280b6ac827119f13cee0",
+      "download": "person"
+    },
+    "vball": {
+      "path": "vball.onnx",
+      "bytes": 196713,
+      "sha256": "2f36bd129c51a4d8afb9a23fd4816be578c65041d463d55a81d1667735070b76",
+      "download": "vball"
+    },
+    "ocr_recognizer": {
+      "path": "ocr/english_g2.pth",
+      "bytes": 15143997,
+      "sha256": "e2272681d9d67a04e2dff396b6e95077bc19001f8f6d3593c307b9852e1c29e8",
+      "download": "ocr-recognizer",
+      "member": "english_g2.pth"
+    },
+    "ocr_detector": {
+      "path": "ocr/craft_mlt_25k.pth",
+      "bytes": 83152330,
+      "sha256": "4a5efbfb48b4081100544e75e1e2b57f8de3d84f213004b14b85fd4b3748db17",
+      "download": "ocr-detector",
+      "member": "craft_mlt_25k.pth"
+    }
+  },
+  "downloads": {
+    "volleyball-core": {
+      "url": "https://drive.usercontent.google.com/download?id=1AVc5DrM7tJuRxVJA7EJ6QSkg-ZLHBiRQ&export=download&confirm=t",
+      "format": "zip",
+      "max_bytes": 1500000000,
+      "sha256": "662b4e6e6b912b8867a1d2198c10ebb79642ab42ccdfbc51dabc6ac3e11af83a"
+    },
+    "person": {
+      "url": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11l-pose.pt",
+      "format": "raw",
+      "max_bytes": 60000000
+    },
+    "vball": {
+      "url": "https://raw.githubusercontent.com/asigatchov/fast-volleyball-tracking-inference/637c217b6589be50eba77687d3f5fa5ca103c175/models/VballNetV1_seq9_grayscale_330_h288_w512.onnx",
+      "format": "raw",
+      "max_bytes": 10000000
+    },
+    "ocr-recognizer": {
+      "url": "https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english_g2.zip",
+      "format": "zip",
+      "max_bytes": 100000000
+    },
+    "ocr-detector": {
+      "url": "https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft_mlt_25k.zip",
+      "format": "zip",
+      "max_bytes": 150000000
+    }
+  }
+}

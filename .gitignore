@@ -24,3 +24,18 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .env
+.venv/
+models/
+dist/
+build/
+*.egg-info/
+.uv-cache/
+# Guard against accidentally placing large local weights/media outside their stores.
+*.pt
+*.pth
+*.onnx
+*.safetensors
+*.mp4
+*.mov
+*.MOV
+*.avi

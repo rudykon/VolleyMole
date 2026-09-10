@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools==81.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "volleymole"
+version = "0.2.0"
+description = "PTS-based, resumable volleyball top-five/top-ten editing"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "numpy==2.3.5", "opencv-python-headless==4.13.0.92",
+  "pillow==12.3.0", "scipy==1.17.1", "av==18.1.0",
+  "torch==2.11.0", "torchvision==0.26.0", "transformers==4.57.6",
+  "ultralytics==8.4.143", "onnxruntime-gpu==1.24.1", "easyocr==1.7.2",
+]
+
+[project.scripts]
+volleymole = "volleymole.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+volleymole = ["*.json", "prompts/*.md", "assets/**/*", "licenses/*"]
+
+[tool.uv]
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+# Ultralytics requests the GUI wheel; EasyOCR requests headless. Both provide
+# cv2 and must not be installed together. The pinned headless build is sufficient.
+exclude-dependencies = ["opencv-python"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
