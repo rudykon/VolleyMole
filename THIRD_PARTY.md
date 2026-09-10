@@ -52,8 +52,10 @@ Runtime wheels are separately resolved and hash-pinned in `uv.lock`. In particul
 - FFmpeg/FFprobe are external executables. The current encoder is `libx264`;
   any binary redistribution must follow the actual FFmpeg build's license.
 
-This repository has not assigned a blanket new license to the user's
-first-party code. This inventory is provenance, not a legal clearance opinion.
+VolleyMole's first-party code is licensed under the [MIT License](LICENSE).
+That license does not relicense third-party code, dependencies, model weights,
+or separately licensed assets. This inventory is provenance, not a legal
+clearance opinion.
 
 ## Weights and artwork
 

@@ -154,4 +154,4 @@ python3 scripts/check_release.py
 
 第三方改编源码、依赖、字体和模型权重各自保留其许可边界，详见 [THIRD_PARTY.md](THIRD_PARTY.md) 与 [素材说明](src/volleymole/assets/README.md)。其中 Ultralytics 为 AGPL 依赖，不能把本项目整体视为 MIT 授权。
 
-当前仓库尚未为自有代码指定项目级许可证。模型权重、比赛录像和本地凭据不随仓库分发；第三方源码许可也不自动覆盖权重、品牌标志或其他素材。
+项目自有代码采用 [MIT License](LICENSE)。第三方代码、依赖和素材仍遵循各自的许可条款。模型权重、比赛录像和本地凭据不随仓库分发；MIT 许可不自动覆盖模型权重、品牌标志或其他单独授权的素材。
