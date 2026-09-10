@@ -150,12 +150,14 @@ def overlay(path,kind,font_path,index=0):
     draw=ImageDraw.Draw(canvas)
     color=COLORS[index%len(COLORS)]
     if kind=='teaser':
-        draw.rectangle((0,0,720,109),fill=INK+(255,))
+        # Let the opening highlight stay visible behind its title; artwork and
+        # outlined lettering are the only pixels added at the top.
         teasers=('volley_ball','volley_dive','volley_set','volley_receive','volley_spike')
         art=sticker(ART_ROOT/f'{teasers[index%len(teasers)]}.png',(115,106))
         canvas.alpha_composite(art,(3,2))
-        canvas.alpha_composite(lettering('先看这几下！',48,color,570,1),(125,1))
-        draw.text((141,76),'精彩抢先看  ·  好球马上来',font=ImageFont.truetype(str(font_path),19),fill=CREAM)
+        canvas.alpha_composite(lettering('先看这几下！',48,color,570,1,outline=INK),(125,1))
+        draw.text((141,76),'精彩抢先看  ·  好球马上来',font=ImageFont.truetype(str(font_path),19),fill=CREAM,
+                  stroke_width=2,stroke_fill=INK)
         draw.rounded_rectangle((185,1180,535,1245),radius=24,fill=INK+(240,))
         text=lettering('别眨眼，好球来了！',30,CREAM,325)
         canvas.alpha_composite(text,((720-text.width)//2,1182))

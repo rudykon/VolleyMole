@@ -39,6 +39,19 @@ class ReplayOverlayTests(unittest.TestCase):
                     self.assertTrue(any(a>0 and r>230 and g>170 for r,g,b,a in colors))
                     self.assertTrue(any(a>0 and r<40 and g<40 and b<60 for r,g,b,a in colors))
 
+    def test_teaser_title_has_a_transparent_top_background(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/'teaser.png'
+            overlay(path,'teaser',self.font)
+            with Image.open(path) as pixels:
+                alpha=pixels.getchannel('A')
+                # These positions were formerly covered by the solid black bar.
+                for point in ((700,5),(700,105),(120,105),(350,105)):
+                    self.assertEqual(alpha.getpixel(point),0,point)
+                top=alpha.crop((0,0,720,110))
+                self.assertGreater(top.histogram()[0]/(top.width*top.height),.45)
+
 
 @unittest.skipUnless(importlib.util.find_spec('PIL'),'Run with the tracking Python for image tests')
 class TransparentHeaderTests(unittest.TestCase):

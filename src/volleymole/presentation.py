@@ -117,8 +117,16 @@ def overlay_asset(path, kind, font_path, index=0):
 def effect_clip(source, path, segment, relative_start, overlay):
     rate = segment['playback_rate']; duration = segment['duration_sec']
     span = segment['source_end_sec']-segment['source_start_sec']
+    # Teasers are taken from a rendered rally, whose top area also carries its
+    # rank header.  Replace that area with live court pixels before applying
+    # the transparent teaser lettering, so no second title shows through.
+    clean_teaser = ('[base]split=2[base_video][court_source];'
+                    '[court_source]crop=720:765:0:110,scale=720:875[court];'
+                    '[base_video][court]overlay=0:0:shortest=1[v];'
+                    if segment['kind']=='teaser' else '[base]null[v];')
     graph = (f'[0:v]setpts=(PTS-STARTPTS)/{rate},fps=30,tpad=stop_mode=clone:stop_duration=1,'
-             f'trim=end_frame={segment["output_frames"]},setsar=1[v];'
+             f'trim=end_frame={segment["output_frames"]},setsar=1[base];'
+             f'{clean_teaser}'
              '[v][1:v]overlay=0:0:shortest=1,format=yuv420p[outv];'
              f'[0:a]asetpts=PTS-STARTPTS,atempo={rate},apad,atrim=duration={duration},'
              f'afade=t=in:d=0.025,afade=t=out:st={max(0,duration-.04)}:d=0.04[outa]')
@@ -177,9 +185,10 @@ def render_lively(directory, font):
     output=directory/f'top{len(clips)}_lively.mp4'
     concatenate_segments(segments,output)
     render_elapsed=time.perf_counter()-started
-    save_json(directory/'render_report_lively.json',{'output':str(output),'style':'lively','design_revision':5,'order':'countdown',
+    save_json(directory/'render_report_lively.json',{'output':str(output),'style':'lively','design_revision':6,'order':'countdown',
         'font_path':str(font),
         'header_background':'transparent',
+        'teaser_header_background':'transparent',
         'replay_caption_background':'transparent',
         'illustration_assets':[identity(p) for p in asset_paths()],
         'clips':clips,'segments':segments,'expected_duration_sec':sum(s['output_frames'] for s in segments)/FPS,
