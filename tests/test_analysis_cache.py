@@ -26,6 +26,17 @@ class CacheTests(unittest.TestCase):
         with patch('importlib.metadata.version',return_value='changed-version'):
             self.assertNotEqual(baseline,signature())
 
+    def test_four_gpu_assignment_and_order_enter_cache_key_without_initializing_cuda(self):
+        source = {'sha256':'a'*64,'bytes':123}
+        registry = SimpleNamespace(entries={})
+        with patch('volleymole.detectors.resolve_device', side_effect=AssertionError('no CUDA on cache read')):
+            single = inference_signature(source,registry,'cuda:0',None,.75)
+            four = inference_signature(source,registry,'auto',None,.75,'cuda:0,cuda:1,cuda:2,cuda:3')
+            reordered = inference_signature(source,registry,'auto',None,.75,'cuda:1,cuda:0,cuda:2,cuda:3')
+        self.assertNotEqual(single, four)
+        self.assertNotEqual(four, reordered)
+        self.assertIn('gpu_stages.py', four['code'])
+
     def test_explicit_shared_cache_checks_relocated_raw_artifact_hash(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

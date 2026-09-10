@@ -11,6 +11,7 @@ from .models import ModelRegistry
 from .video import chunks, decode
 from .detectors import Detector, resolve_device
 from .telemetry import UsageMonitor
+from .gpu_stages import parse_devices
 
 
 def analytics(args, registry, device):
@@ -95,11 +96,15 @@ def main(argv=None):
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--models', type=Path)
     parser.add_argument('--device', default='auto')
+    parser.add_argument('--devices', type=parse_devices,
+                        help='四卡共享推理：cuda:0,cuda:1,cuda:2,cuda:3（状态/动作/人物/球轨迹）')
     parser.add_argument('--number', type=int)
     parser.add_argument('--confidence', type=float, default=.75)
     parser.add_argument('--max-frames', type=int, help='smoke test only; never accepted as a full-match cache')
     parser.add_argument('--half', action='store_true')
     args = parser.parse_args(argv)
+    if args.devices and (args.kind != 'shared' or args.device != 'auto'):
+        parser.error('--devices requires --kind shared and cannot be combined with --device')
     if args.max_frames is not None and args.max_frames < 1:
         parser.error('--max-frames must be positive')
     args.video = args.video.resolve()
@@ -109,19 +114,22 @@ def main(argv=None):
     os.environ.setdefault('HF_HUB_OFFLINE','1')
     import torch
     torch.set_num_threads(4)
-    device = resolve_device(args.device)
+    if args.devices:
+        args.devices = [resolve_device(d) for d in args.devices]
+    device = args.devices[0] if args.devices else resolve_device(args.device)
     registry = ModelRegistry(args.models)
     from .shared import shared_inference
-    with UsageMonitor(device) as usage:
+    with UsageMonitor(args.devices or device) as usage:
         models = {'analytics':analytics, 'tracking':tracking, 'player':player,
                   'shared':shared_inference}[args.kind](args,registry,device)
     save_json(args.output/'telemetry.json', usage.report())
     save_json(args.output/'provenance.json', {'project':'VolleyMole', 'mode':'package_fresh_inference',
         'source':identity(args.video), 'models':registry.verify(models) if models else {},
-        'parameters':{'device':device, 'half':args.half, 'max_frames':args.max_frames},
+        'parameters':{'device':device, 'devices':args.devices, 'half':args.half, 'max_frames':args.max_frames},
         'time_basis':'source PTS minus container start',
-        'implementation':'shared-pts90-v1' if args.kind=='shared' else 'independent-decode-phase1'})
-    print(f'{args.kind}: {usage.elapsed:.3f}s on {device}', flush=True)
+        'implementation': ('shared-pts90-four-gpu-v1' if args.devices else 'shared-pts90-v1')
+                         if args.kind=='shared' else 'independent-decode-phase1'})
+    print(f'{args.kind}: {usage.elapsed:.3f}s on {args.devices or device}', flush=True)
 
 
 if __name__ == '__main__':

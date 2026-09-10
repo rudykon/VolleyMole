@@ -81,6 +81,9 @@ def main(argv=None):
     parser.add_argument('--analysis-cache-dir',type=Path,default=ROOT/'runs/.analysis-cache')
     parser.add_argument('--no-analysis-cache',action='store_true',help='强制重新推理，不复用全场分析缓存')
     parser.add_argument('--device',choices=['auto','cpu','cuda','cuda:0','cuda:1','cuda:2','cuda:3'],default='auto')
+    from .gpu_stages import parse_devices
+    parser.add_argument('--devices',type=parse_devices,
+                        help='四卡共享推理：cuda:0,cuda:1,cuda:2,cuda:3（状态/动作/人物/球轨迹）')
     parser.add_argument('--ranker',choices=['auto','rules'],default='auto')
     parser.add_argument('--api-base',default=os.getenv('VOLLEYMOLE_API_BASE','https://api.openai.com/v1'))
     parser.add_argument('--model',default=os.getenv('VOLLEYMOLE_MODEL'))
@@ -92,6 +95,9 @@ def main(argv=None):
     parser.add_argument('--stop-after',choices=['manifest','rank','render'],default='render')
     parser.add_argument('--rerun-from',choices=['inference','analytics','tracking','player','rallies','previews','rank','render','verify'])
     args=parser.parse_args(argv)
+    if args.devices and (args.device!='auto' or args.inference_mode!='shared' or
+                         args.evidence_cache or args.analytics_cache or args.tracking_cache):
+        parser.error('--devices 仅适用于共享推理，不能与 --device、independent 或显式证据导入同时使用')
     args.analytics_python=args.tracking_python=args.player_python=sys.executable
     registry=ModelRegistry(args.models)
     os.environ['VOLLEYMOLE_MODELS']=str(registry.directory)
@@ -163,12 +169,12 @@ def main(argv=None):
     tracking_cache=args.tracking_cache or cached.get('tracking')
     save_json(directory/'run_config.json',{'video':str(video),'top_k':args.top_k,'focus_player':args.focus_player,
               'analytics_cache':str(analytics_cache) if analytics_cache else None,'tracking_cache':str(tracking_cache) if tracking_cache else None,
-              'device':args.device,'config':config,'code':code,'inference_mode':args.inference_mode,
+              'device':args.device,'devices':args.devices,'config':config,'code':code,'inference_mode':args.inference_mode,
               'models':str(registry.directory),'analysis_cache_dir':str(args.analysis_cache_dir)})
     def cache_sig(path, files):
         return [identity(Path(path)/f) for f in files] if path else None
     if args.inference_mode=='shared' and not analytics_cache and not tracking_cache:
-        signature=inference_signature(meta['identity'],registry,args.device,args.focus_player,config['player_confidence'])
+        signature=inference_signature(meta['identity'],registry,args.device,args.focus_player,config['player_confidence'],args.devices)
         force=args.no_analysis_cache or args.rerun_from in ('inference','analytics','tracking','player')
         if force:stages.data['stages'].pop('inference',None)
         result=stages.execute('inference',signature,lambda:ingest_shared(video,directory,registry,signature,args.analysis_cache_dir,force))

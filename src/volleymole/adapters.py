@@ -9,19 +9,21 @@ import sys
 from .common import APP, Stages, digest, identity, read_json, run, save_json
 
 INFERENCE_FILES = ('common.py','video.py','inference.py','shared.py','state_model.py',
-                   'detectors.py','tracker.py','vball_primitives.py','jersey.py','models.py','telemetry.py')
+                   'detectors.py','tracker.py','vball_primitives.py','jersey.py','models.py','telemetry.py','gpu_stages.py')
 
 
-def inference_signature(source, registry, device, number, confidence):
+def inference_signature(source, registry, device, number, confidence, devices=None):
     import importlib.metadata as metadata
     from .detectors import resolve_device
+    from .gpu_stages import parse_devices
     # Explicit device fingerprints remain reusable without a live GPU (e.g. a
     # render-only resume). The inference worker validates hardware if it runs.
-    device = resolve_device(device) if device=='auto' else ('cuda:0' if device=='cuda' else device)
+    devices = parse_devices(devices)
+    device = devices[0] if devices else (resolve_device(device) if device=='auto' else ('cuda:0' if device=='cuda' else device))
     packages = ('torch','torchvision','transformers','ultralytics','onnxruntime-gpu',
                 'numpy','av','opencv-python-headless','easyocr')
     return {'source': {k:source[k] for k in ('sha256','bytes')}, 'models':registry.entries,
-            'device':device, 'number':number, 'confidence':confidence, 'half':True,
+            'device':device, 'devices':devices, 'number':number, 'confidence':confidence, 'half':True,
             'code':{name:digest(APP/name) for name in INFERENCE_FILES},
             'environment':{name:metadata.version(name) for name in packages}}
 
@@ -40,7 +42,8 @@ def ingest_shared(video, directory, registry, signature, cache_root, force=False
             state.data['stages'].pop('shared_inference',None)
         def compute():
             command = [sys.executable,'-m','volleymole.inference','--kind','shared','--video',video,
-                '--output',cached,'--models',registry.directory,'--device',signature['device'],'--half']
+                '--output',cached,'--models',registry.directory,'--half']
+            command += ['--devices', ','.join(signature['devices'])] if signature.get('devices') else ['--device', signature['device']]
             if signature['number'] is not None:
                 command += ['--number',signature['number'],'--confidence',signature['confidence']]
             run(command,cached/'inference.log')

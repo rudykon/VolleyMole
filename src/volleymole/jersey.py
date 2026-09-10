@@ -13,6 +13,21 @@ import cv2
 PLAYER_SAMPLE_FILTER = 'fps=1:round=up:start_time=0'  # legacy test contract only
 
 
+def pin_ocr_device(reader, device):
+    """EasyOCR wraps CUDA models in all-visible-device DataParallel by default.
+
+    Remove that wrapper from these reader-owned instances: otherwise a reader
+    requested on cuda:2 still expects its parameters on DataParallel's cuda:0.
+    No global monkeypatch or extra model copy is needed for batch-one OCR.
+    """
+    if device.startswith('cuda'):
+        import torch
+        for name in ('detector', 'recognizer'):
+            model = getattr(reader, name)
+            if isinstance(model, torch.nn.DataParallel):
+                setattr(reader, name, model.module.to(device))
+
+
 def torso_box(box, width, height):
     x1, y1, x2, y2 = box
     w, h = x2-x1, y2-y1
@@ -40,6 +55,7 @@ class JerseyReader:
             model_storage_directory=str(registry.target('ocr_recognizer').parent),
             user_network_directory=str(runtime),
             download_enabled=False, verbose=False)
+        pin_ocr_device(self.reader, device)
         self.number, self.confidence, self.interval = number, confidence, interval
         self.next_sample = 0.
         self.samples, self.observations, self.detections = [], [], []

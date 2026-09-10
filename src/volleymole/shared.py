@@ -6,6 +6,7 @@ neural detection. Independent inference remains available for parity checks.
 """
 import csv
 import json
+from contextlib import nullcontext
 
 from .common import save_json
 from .detectors import Detector
@@ -13,6 +14,7 @@ from .state_model import StateClassifier
 from .tracker import BallTracker
 from .jersey import JerseyReader
 from .video import chunks, decode
+from .gpu_stages import GPUStages, ROLES
 
 
 def fallback_indices(ball_rows, actions):
@@ -22,19 +24,70 @@ def fallback_indices(ball_rows, actions):
             if not ball['Visibility'] and not any(a['class']=='ball' and a['confidence']>=.25 for a in raw)]
 
 
+def track_batch(tracker, packets):
+    return [row for batch in chunks(packets,9) for row in tracker.predict(batch)]
+
+
+def detect_batch(detector, images):
+    # Retain 30-frame outer / 8-frame inner batches, also in multi-GPU mode.
+    return [row for batch in chunks(images,30) for row in detector.detect(batch)]
+
+
+def classify_batch(model, packets):
+    states, windows = [], []
+    for batch in chunks(packets,30):
+        state = model.classify([p.pixels for p in batch])
+        states.extend([state]*len(batch))
+        windows.append({'start_frame':batch[0].index,'end_frame':batch[-1].index,
+            'start_s':batch[0].time_sec,'end_s':batch[-1].time_sec,'state':state.label,
+            'confidence':state.confidence,'probabilities':state.probabilities,
+            'sampled_frames':[batch[i].index for i in state.sampled_indices]})
+    return states, windows
+
+
+def infer_batch(packets, state_model, action, person, auxiliary, tracker, workers=None):
+    images = [p.pixels for p in packets]
+    if workers is None:
+        balls = track_batch(tracker, packets)
+        actions = detect_batch(action, images)
+        people = detect_batch(person, images)
+        missing = fallback_indices(balls, actions)
+        extra_rows = auxiliary.detect([images[i] for i in missing])
+        states, windows = classify_batch(state_model, packets)
+    else:
+        state_future = workers.submit('state', classify_batch, state_model, packets)
+        ball_future = workers.submit('tracking', track_batch, tracker, packets)
+        action_future = workers.submit('action', detect_batch, action, images)
+        person_future = workers.submit('person', detect_batch, person, images)
+        balls, actions = ball_future.result(), action_future.result()
+        missing = fallback_indices(balls, actions)
+        # Same tracking worker/device: never run auxiliary or tracker twice on
+        # one model concurrently, and do not speculate on the fallback mask.
+        extra_future = workers.submit('tracking', auxiliary.detect, [images[i] for i in missing])
+        people = person_future.result()
+        states, windows = state_future.result()
+        extra_rows = extra_future.result()
+    if any(len(rows) != len(packets) for rows in (balls, actions, people, states)) or len(extra_rows) != len(missing):
+        raise RuntimeError('Shared inference returned an incomplete batch')
+    return balls, actions, people, dict(zip(missing, extra_rows)), states, windows
+
+
 def shared_inference(args, registry, device):
     for kind in ('analytics','tracking','player'):
         (args.output/kind).mkdir(parents=True, exist_ok=True)
-    state_model = StateClassifier(registry,device)
-    action = Detector(registry,'action',device,half=args.half)
-    person = Detector(registry,'person',device,half=args.half)
-    auxiliary = Detector(registry,'ball',device,half=args.half)
-    tracker = BallTracker(registry,device,args.output/'tracking/profiles')
-    reader = JerseyReader(registry,args.number,device,args.confidence,
+    devices = getattr(args, 'devices', None)
+    assigned = dict(zip(ROLES, devices)) if devices else dict.fromkeys(ROLES, device)
+    state_model = StateClassifier(registry,assigned['state'])
+    action = Detector(registry,'action',assigned['action'],half=args.half)
+    person = Detector(registry,'person',assigned['person'],half=args.half)
+    auxiliary = Detector(registry,'ball',assigned['tracking'],half=args.half)
+    tracker = BallTracker(registry,assigned['tracking'],args.output/'tracking/profiles')
+    reader = JerseyReader(registry,args.number,assigned['person'],args.confidence,
         runtime_directory=args.output/'player/ocr_runtime') if args.number is not None else None
     windows, count = [], 0
     skipped_visible = skipped_action_ball = 0
-    with (args.output/'analytics/detections.jsonl').open('w') as out, \
+    with (GPUStages(devices) if devices else nullcontext()) as workers, \
+            (args.output/'analytics/detections.jsonl').open('w') as out, \
             (args.output/'tracking/ball.csv').open('w') as csv_out, \
             (args.output/'tracking/source_pts.csv').open('w') as pts:
         writer = csv.DictWriter(csv_out,fieldnames=['Frame','Visibility','X','Y','Radius','Confidence','SourceTime','evidence'])
@@ -42,22 +95,9 @@ def shared_inference(args, registry, device):
         # 90 is the least common multiple of state windows (30) and VballNet (9).
         # Preserve both models' original sequence boundaries, including EOF tails.
         for packets in chunks(decode(args.video,max_frames=args.max_frames),90):
-            images = [p.pixels for p in packets]
-            balls = [row for batch in chunks(packets,9) for row in tracker.predict(batch)]
-            # Preserve the legacy 30-frame detector batch layout for exact parity.
-            actions = [row for batch in chunks(images,30) for row in action.detect(batch)]
-            people = [row for batch in chunks(images,30) for row in person.detect(batch)]
-            missing = fallback_indices(balls,actions)
-            extra_rows = auxiliary.detect([images[i] for i in missing])
-            extras = dict(zip(missing,extra_rows))
-            states = []
-            for batch in chunks(packets,30):
-                state = state_model.classify([p.pixels for p in batch])
-                states.extend([state]*len(batch))
-                windows.append({'start_frame':batch[0].index,'end_frame':batch[-1].index,
-                    'start_s':batch[0].time_sec,'end_s':batch[-1].time_sec,'state':state.label,
-                    'confidence':state.confidence,'probabilities':state.probabilities,
-                    'sampled_frames':[batch[i].index for i in state.sampled_indices]})
+            balls, actions, people, extras, states, batch_windows = infer_batch(
+                packets,state_model,action,person,auxiliary,tracker,workers)
+            windows.extend(batch_windows)
             for i,(packet,ball,raw_actions,players,state) in enumerate(zip(packets,balls,actions,people,states)):
                 action_balls = [a for a in raw_actions if a['class']=='ball' and a['confidence']>=.25]
                 if ball['Visibility']:
@@ -96,6 +136,17 @@ def shared_inference(args, registry, device):
             'ball_skipped_vball_visible':skipped_visible,'ball_skipped_action_ball':skipped_action_ball,
             'ocr_calls':reader.calls if reader else 0,'ocr_extra_person_detections':0},
         'backend':tracker.backend,'implementation':'shared-pts90-v1'}
+    if devices:
+        actual = {'state': str(next(state_model.model.parameters()).device),
+                  'action': str(action.model.predictor.device),
+                  'person': str(person.model.predictor.device),
+                  'tracking': tracker.backend['requested']}
+        auxiliary_device = str(auxiliary.model.predictor.device) if auxiliary.frames else None
+        if actual != assigned or (auxiliary_device is not None and auxiliary_device != assigned['tracking']):
+            raise RuntimeError('Actual inference model devices disagree with four-GPU assignment')
+        summary.update(devices=devices,implementation='shared-pts90-four-gpu-v1',
+            gpu_execution={**workers.report(),'actual_model_devices':actual,
+                           'auxiliary_actual_device':auxiliary_device})
     if count != auxiliary.frames+skipped_visible+skipped_action_ball:
         raise RuntimeError('Auxiliary ball scheduling accounting mismatch')
     save_json(args.output/'summary.json',summary)
