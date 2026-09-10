@@ -20,15 +20,24 @@ def frame_at(video, seconds, width=640):
     return pixels
 
 
-def previews(directory):
+def previews(directory, rally_ids=None, workers=1):
+    from concurrent.futures import ThreadPoolExecutor
     manifest=read_json(directory/'match_manifest.json')
     video=manifest['source']['path']; outputs=[]
+    jobs=[]
     for r in manifest['rallies']:
+        if rally_ids is not None and r['rally_id'] not in rally_ids:
+            continue
         for when,name in zip(r['preview_times_sec'],r['preview_frames']):
-            path=directory/name;path.parent.mkdir(parents=True,exist_ok=True)
-            if not cv2.imwrite(str(path),frame_at(video,when)):
-                raise RuntimeError(f'无法保存关键帧：{path}')
+            jobs.append((when,name))
             outputs.append(name)
+    def extract(job):
+        when,name=job
+        path=directory/name;path.parent.mkdir(parents=True,exist_ok=True)
+        if not cv2.imwrite(str(path),frame_at(video,when)):
+            raise RuntimeError(f'无法保存关键帧：{path}')
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        list(pool.map(extract,jobs))
     save_json(directory/'previews/index.json',{'files':outputs})
 
 
@@ -141,22 +150,24 @@ def render_clip(directory, item, manifest, font_path, center_only=False, style='
     return report
 
 
-def render(directory,font,style='classic'):
+def render(directory,font,style='classic',workers=1):
+    from concurrent.futures import ThreadPoolExecutor
     if style=='lively':
         from .presentation import render_lively
-        return render_lively(directory,font)
+        return render_lively(directory,font,workers)
     manifest=read_json(directory/'match_manifest.json');decision=read_json(directory/'edit_decision.json')
     from .schemas import validate_decision
     validate_decision(decision,manifest,directory,len(decision['selected']))
-    clips=[]
-    for item in reversed(decision['selected']):
+    def render_item(item):
         print(f"渲染 #{item['rank']} {item['rally_id']}",flush=True)
         try:
             result=render_clip(directory,item,manifest,font)
         except (ValueError,IndexError) as exc:
             result=render_clip(directory,item,manifest,font,center_only=True)
             result['fallback_error']=type(exc).__name__
-        clips.append(result)
+        return result
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        clips=list(pool.map(render_item,reversed(decision['selected'])))
     output=directory/f'top{len(clips)}.mp4'
     concatenate_segments(clips,output)
     save_json(directory/'render_report.json',{'output':str(output),'order':'countdown','clips':clips,'expected_duration_sec':sum(r['duration_sec'] for r in clips)})
@@ -186,7 +197,9 @@ if __name__=='__main__':
     parser.add_argument('--run',type=Path,required=True)
     parser.add_argument('--font',default=FONT)
     parser.add_argument('--style',choices=['classic','lively'],default='classic')
+    parser.add_argument('--rally-ids',nargs='*')
+    parser.add_argument('--workers',type=int,choices=range(1,5),default=1)
     args=parser.parse_args();directory=args.run.resolve()
     cv2.setNumThreads(2)
-    if args.kind=='previews':previews(directory)
-    else:render(directory,args.font,args.style)
+    if args.kind=='previews':previews(directory,args.rally_ids,args.workers)
+    else:render(directory,args.font,args.style,args.workers)

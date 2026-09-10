@@ -102,7 +102,14 @@ def main(argv=None):
     parser.add_argument('--confidence', type=float, default=.75)
     parser.add_argument('--max-frames', type=int, help='smoke test only; never accepted as a full-match cache')
     parser.add_argument('--half', action='store_true')
+    parser.add_argument('--pipeline-depth', type=int, choices=range(1,5), default=1)
+    parser.add_argument('--auxiliary-device')
+    parser.add_argument('--vball-engine', choices=['ort','ort-bound'], default='ort')
     args = parser.parse_args(argv)
+    if args.kind != 'shared' and (args.pipeline_depth != 1 or args.auxiliary_device or args.vball_engine != 'ort'):
+        parser.error('Performance options require --kind shared')
+    if args.auxiliary_device and (not args.devices or args.auxiliary_device not in args.devices):
+        parser.error('--auxiliary-device must be one of --devices')
     if args.devices and (args.kind != 'shared' or args.device != 'auto'):
         parser.error('--devices requires --kind shared and cannot be combined with --device')
     if args.max_frames is not None and args.max_frames < 1:
@@ -125,7 +132,8 @@ def main(argv=None):
     save_json(args.output/'telemetry.json', usage.report())
     save_json(args.output/'provenance.json', {'project':'VolleyMole', 'mode':'package_fresh_inference',
         'source':identity(args.video), 'models':registry.verify(models) if models else {},
-        'parameters':{'device':device, 'devices':args.devices, 'half':args.half, 'max_frames':args.max_frames},
+        'parameters':{'device':device, 'devices':args.devices, 'half':args.half, 'max_frames':args.max_frames,
+                      'pipeline_depth':args.pipeline_depth,'auxiliary_device':args.auxiliary_device,'vball_engine':args.vball_engine},
         'time_basis':'source PTS minus container start',
         'implementation': ('shared-pts90-four-gpu-v1' if args.devices else 'shared-pts90-v1')
                          if args.kind=='shared' else 'independent-decode-phase1'})

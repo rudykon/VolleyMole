@@ -9,10 +9,11 @@ import sys
 from .common import APP, Stages, digest, identity, read_json, run, save_json
 
 INFERENCE_FILES = ('common.py','video.py','inference.py','shared.py','state_model.py',
-                   'detectors.py','tracker.py','vball_primitives.py','jersey.py','models.py','telemetry.py','gpu_stages.py')
+                   'detectors.py','tracker.py','vball_primitives.py','jersey.py','models.py','telemetry.py','gpu_stages.py',
+                   'performance.py','pipeline.py')
 
 
-def inference_signature(source, registry, device, number, confidence, devices=None):
+def inference_signature(source, registry, device, number, confidence, devices=None, performance=None):
     import importlib.metadata as metadata
     from .detectors import resolve_device
     from .gpu_stages import parse_devices
@@ -23,6 +24,7 @@ def inference_signature(source, registry, device, number, confidence, devices=No
     packages = ('torch','torchvision','transformers','ultralytics','onnxruntime-gpu',
                 'numpy','av','opencv-python-headless','easyocr')
     return {'source': {k:source[k] for k in ('sha256','bytes')}, 'models':registry.entries,
+            'performance':performance or {'pipeline_depth':1,'auxiliary_device':None,'vball_engine':'ort'},
             'device':device, 'devices':devices, 'number':number, 'confidence':confidence, 'half':True,
             'code':{name:digest(APP/name) for name in INFERENCE_FILES},
             'environment':{name:metadata.version(name) for name in packages}}
@@ -44,6 +46,9 @@ def ingest_shared(video, directory, registry, signature, cache_root, force=False
             command = [sys.executable,'-m','volleymole.inference','--kind','shared','--video',video,
                 '--output',cached,'--models',registry.directory,'--half']
             command += ['--devices', ','.join(signature['devices'])] if signature.get('devices') else ['--device', signature['device']]
+            for name,value in signature.get('performance',{}).items():
+                if value is not None:
+                    command += ['--'+name.replace('_','-'),str(value)]
             if signature['number'] is not None:
                 command += ['--number',signature['number'],'--confidence',signature['confidence']]
             run(command,cached/'inference.log')

@@ -28,3 +28,25 @@ uv sync --locked
 本机同源整场四卡分析加清单实测 10 分 16 秒，对照历史单卡 17 分 28 秒，观察到 1.70 倍加速；57,531 帧原始证据逐字节一致。计时范围、非独占负载限制和复现方法见 [四卡 GPU 实测](docs/四卡GPU实测.md)。
 
 完整阶段验证与基线对照见 [整合实施与验收台账](docs/单仓库整合实施与验收.md)。旧 `tools/volleyball-top-plays/run_match.py` 仅作为转发入口保留，维护新代码请修改 `src/volleymole`。上游检出和旧成片保留供追溯，不参与新包运行。
+
+性能优化开关、细分计时口径和对照脚本见 [性能优化与验证](docs/性能优化与验证.md)。默认只为实际需要的回合生成预览；四卡跨批流水线、辅助球检测分卡、ONNX Runtime 绑定后端和独立回合并行渲染可分别启用：
+
+```bash
+.venv/bin/volleymole run --video data/样例视频/1.mp4 --top-k 5 --ranker rules \
+  --devices cuda:0,cuda:1,cuda:2,cuda:3 --pipeline-depth 2 \
+  --auxiliary-device cuda:0 --vball-engine ort-bound --render-workers 2
+```
+
+## 致谢与开源参考
+
+感谢以下项目的作者与维护者分享排球分析模型、算法和基础工具：
+
+- [volleyball-ml-models](https://github.com/masouduut94/volleyball-ml-models)（Masoud Masoumi Moghadam）：本项目比赛状态分类实现的来源，沿用其图像预处理、帧采样和分类流程，并适配统一推理管线。
+- [fast-volleyball-tracking-inference](https://github.com/asigatchov/fast-volleyball-tracking-inference)（Alexander Sigatchov）：提供 VballNet 模型及推理参考；本项目改编了序列处理、热图定位、球半径滤波和跟球裁切相关实现。
+- [Ultralytics](https://github.com/ultralytics/ultralytics) 与 [EasyOCR](https://github.com/JaidedAI/EasyOCR)：分别为动作、人物和辅助球检测，以及球衣号码 OCR 提供基础能力。
+- [PyTorch](https://pytorch.org/)、[Transformers](https://github.com/huggingface/transformers) 与 [ONNX Runtime](https://onnxruntime.ai/)：支持模型加载、GPU 推理和运行时优化。
+- [OpenCV](https://opencv.org/)、[PyAV](https://pyav.org/)、[FFmpeg](https://ffmpeg.org/)、[NumPy](https://numpy.org/)、[SciPy](https://scipy.org/) 与 [Pillow](https://python-pillow.org/)：支持视频解码、图像处理、轨迹计算和成片合成。
+
+球衣号码功能也参考了 `volleyball-highlights` 的功能目标；当前 `jersey.py` 为独立实现，未复制该项目源码。
+
+改编源码的固定版本、修改范围与版权声明，以及依赖和模型权重的许可说明，详见 [第三方来源清单](THIRD_PARTY.md)。各项目保留各自的许可证，致谢不改变其授权条款。

@@ -27,8 +27,9 @@ def parse_devices(value):
 
 
 class GPUStages:
-    def __init__(self, devices, *, bind_cuda=True):
+    def __init__(self, devices, *, bind_cuda=True, auxiliary_device=None):
         self.devices = dict(zip(ROLES, parse_devices(devices)))
+        self.devices['auxiliary'] = auxiliary_device or self.devices['tracking']
         self.bind_cuda = bind_cuda
         self.pools = {}
         self.lock = threading.Lock()
@@ -38,10 +39,11 @@ class GPUStages:
 
     def __enter__(self):
         self.pools = {role: ThreadPoolExecutor(max_workers=1, thread_name_prefix=f'gpu-{role}')
-                      for role in ROLES}
+                      for role in self.devices}
         return self
 
     def submit(self, role, function, *args):
+        queued = time.perf_counter()
         def execute():
             context = nullcontext()
             if self.bind_cuda:
@@ -50,6 +52,8 @@ class GPUStages:
             with context:
                 start = time.perf_counter()
                 with self.lock:
+                    self.stats[role].setdefault('queue_wait_sec', 0.)
+                    self.stats[role]['queue_wait_sec'] += start - queued
                     self.active += 1
                     self.max_active = max(self.max_active, self.active)
                 try:
@@ -70,4 +74,4 @@ class GPUStages:
                 'role_devices': self.devices, 'max_concurrent_stage_tasks': self.max_active,
                 'stages': {role: {**stats, 'wall_sec': round(stats['wall_sec'], 3)}
                            for role, stats in self.stats.items()},
-                'note': 'Stage wall times overlap; they are not GPU kernel timings. Tracking and auxiliary ball share one device.'}
+                'note': 'Stage wall times overlap; they are not GPU kernel timings. Auxiliary tasks include dependency waits.'}

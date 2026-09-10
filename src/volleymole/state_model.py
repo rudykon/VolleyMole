@@ -8,6 +8,8 @@ The GUI/logger/settings dependency graph is intentionally not imported.
 from dataclasses import dataclass
 import cv2
 import numpy as np
+from time import perf_counter
+from .performance import Timings
 
 
 @dataclass(frozen=True)
@@ -47,16 +49,23 @@ class StateClassifier:
             raise ValueError('Unexpected game-state labels')
         self.model.to(device).eval()
         self.calls = 0
+        self.timings = Timings()
 
     def classify(self, frames):
         import torch
+        started = perf_counter()
         indices = uniform_indices(len(frames))
         # Match the deployed core preprocessing, including BGR -> RGB.
         images = [cv2.resize(cv2.cvtColor(frames[i], cv2.COLOR_BGR2RGB), (224,224)) for i in indices]
         inputs = self.processor(images, return_tensors='pt')
+        self.timings.add('preprocess', perf_counter()-started)
+        started = perf_counter()
         inputs = {key: value.to(device=self.device, dtype=self.dtype) for key,value in inputs.items()}
+        self.timings.add('h2d_and_cast', perf_counter()-started)
+        started = perf_counter()
         with torch.inference_mode():
             probabilities = self.model(**inputs).logits.softmax(dim=-1)[0].float().cpu().numpy()
+        self.timings.add('inference_and_d2h', perf_counter()-started)
         if not np.isfinite(probabilities).all():
             raise RuntimeError('Non-finite state inference; refusing to emit fabricated UNKNOWN evidence')
         best = int(probabilities.argmax())

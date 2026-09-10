@@ -7,6 +7,8 @@ from collections import deque
 from pathlib import Path
 import cv2
 import numpy as np
+from time import perf_counter
+from .performance import Timings
 
 from .common import read_json
 from .vball_primitives import preprocess_frames, postprocess_heatmap_output, estimate_ball_radius
@@ -20,7 +22,7 @@ def seq9_shape(shape):
 class BallTracker:
     sequence_length = 9
 
-    def __init__(self, registry, device, profile_directory=None):
+    def __init__(self, registry, device, profile_directory=None, *, engine='ort'):
         import onnxruntime as ort
         registry.verify(['vball'])
         options = ort.SessionOptions()
@@ -53,17 +55,48 @@ class BallTracker:
         self.calls = self.frames = 0
         self.profile_pending = profile_directory is not None
         self.backend = {'requested': device, 'providers': self.session.get_providers()}
+        if engine not in ('ort', 'ort-bound'):
+            raise ValueError('Unknown VballNet engine')
+        if engine == 'ort-bound' and not self.cuda:
+            raise ValueError('ort-bound requires CUDA')
+        self.engine = engine
+        self.backend['engine'] = engine
+        self.timings = Timings()
+        self.binding = None
+        if engine == 'ort-bound':
+            # Same dtype, shape, providers and graph as the reference session.
+            # Reuse GPU input/output allocations; CPU postprocessing is retained.
+            index = int(device.split(':')[1])
+            self.bound_input = ort.OrtValue.ortvalue_from_shape_and_type([1,9,288,512], np.float32, 'cuda', index)
+            self.bound_output = ort.OrtValue.ortvalue_from_shape_and_type([1,9,288,512], np.float32, 'cuda', index)
+            self.binding = self.session.io_binding()
+            self.binding.bind_ortvalue_input(self.input_name, self.bound_input)
+            self.binding.bind_ortvalue_output(self.output_name, self.bound_output)
 
     def predict(self, packets):
         if not 1 <= len(packets) <= self.sequence_length:
             raise ValueError('VballNet batch must contain 1–9 source frames')
         images = [p.pixels for p in packets]
+        started = perf_counter()
         processed = preprocess_frames(images)
         if not self.buffer:
             self.buffer = [processed[0]]*self.sequence_length
         self.buffer = (self.buffer + processed)[-self.sequence_length:]
         tensor = np.stack(self.buffer, axis=0)[None]
-        output = self.session.run([self.output_name], {self.input_name: tensor})[0]
+        self.timings.add('preprocess', perf_counter()-started)
+        if self.binding is None:
+            with self.timings.measure('ort_inference_including_h2d_d2h'):
+                output = self.session.run([self.output_name], {self.input_name: tensor})[0]
+        else:
+            with self.timings.measure('h2d'):
+                self.bound_input.update_inplace(tensor)
+                self.binding.synchronize_inputs()
+            with self.timings.measure('ort_bound_inference'):
+                self.session.run_with_iobinding(self.binding)
+                self.binding.synchronize_outputs()
+            with self.timings.measure('d2h'):
+                output = self.binding.copy_outputs_to_cpu()[0]
+        started = perf_counter()
         if output.shape != (1,9,288,512):
             raise RuntimeError(f'Unexpected VballNet output shape: {output.shape}')
         if not np.isfinite(output).all():
@@ -83,6 +116,7 @@ class BallTracker:
                          'evidence': 'vball_heatmap_detection' if visible else 'vball_not_detected'})
         self.calls += 1
         self.frames += len(packets)
+        self.timings.add('postprocess_and_radius', perf_counter()-started)
         if self.profile_pending:
             path = self.session.end_profiling()
             events = read_json(path)

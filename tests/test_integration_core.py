@@ -92,6 +92,9 @@ class PacketTests(unittest.TestCase):
                 self.last = values['input']
                 return [np.zeros((1,9,288,512),np.float32)]
         tracker = BallTracker.__new__(BallTracker)
+        from volleymole.performance import Timings
+        tracker.timings = Timings()
+        tracker.binding = None
         tracker.session = Session()
         tracker.input_name, tracker.output_name = 'input','output'
         tracker.buffer, tracker.previous_gray = [], None

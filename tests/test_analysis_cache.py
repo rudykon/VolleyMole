@@ -37,6 +37,15 @@ class CacheTests(unittest.TestCase):
         self.assertNotEqual(four, reordered)
         self.assertIn('gpu_stages.py', four['code'])
 
+    def test_performance_backend_and_scheduling_change_cache_key(self):
+        source={'sha256':'a'*64,'bytes':123}
+        registry=SimpleNamespace(entries={})
+        base={'pipeline_depth':1,'auxiliary_device':None,'vball_engine':'ort'}
+        def signature(options):
+            return inference_signature(source,registry,'cuda:0',None,.75,performance=options)
+        for key,value in [('pipeline_depth',2),('auxiliary_device','cuda:0'),('vball_engine','ort-bound')]:
+            self.assertNotEqual(signature(base),signature({**base,key:value}))
+
     def test_explicit_shared_cache_checks_relocated_raw_artifact_hash(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

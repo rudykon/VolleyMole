@@ -141,7 +141,8 @@ def transition_clip(previous, following, path, segment, font_path):
     return encode_transition(previous,following,path,segment,font_path)
 
 
-def render_lively(directory, font):
+def render_lively(directory, font, workers=1):
+    from concurrent.futures import ThreadPoolExecutor
     from .media_worker import render_clip, concatenate_segments
     from .schemas import validate_decision
     started = time.perf_counter()
@@ -150,8 +151,7 @@ def render_lively(directory, font):
     validate_decision(decision,manifest,directory,len(decision['selected']))
     segments = build_timeline(decision,manifest)
     extras = directory/'extras_lively';extras.mkdir(exist_ok=True)
-    clips=[]
-    for item in reversed(decision['selected']):
+    def render_item(item):
         print(f"活力版 #{item['rank']} {item['rally_id']}",flush=True)
         try: clip=render_clip(directory,item,manifest,font,style='lively')
         except (ValueError,IndexError) as exc:
@@ -160,9 +160,13 @@ def render_lively(directory, font):
         clip['display_title']=lively_title(item)
         clip['rank_label']=rank_label(item['rank'],len(decision['selected']))
         clip['illustration']=illustration_for(item).name
-        clips.append(clip)
+        return clip
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        clips=list(pool.map(render_item,reversed(decision['selected'])))
     base_elapsed = time.perf_counter()-started
     by_rank={c['rank']:c for c in clips}
+    # Resolve rally paths before scheduling effects; transition dependencies
+    # refer to the preceding rendered effect, so effects retain their order.
     for segment in segments:
         kind=segment['kind']
         if kind=='rally':
@@ -186,6 +190,7 @@ def render_lively(directory, font):
     concatenate_segments(segments,output)
     render_elapsed=time.perf_counter()-started
     save_json(directory/'render_report_lively.json',{'output':str(output),'style':'lively','design_revision':6,'order':'countdown',
+        'render_workers':workers,
         'font_path':str(font),
         'header_background':'transparent',
         'teaser_header_background':'transparent',

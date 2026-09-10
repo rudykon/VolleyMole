@@ -13,7 +13,7 @@ from .common import APP, ROOT, DEFAULT_FONT, Stages, digest, functions_digest, i
 from .adapters import ingest_analytics, ingest_tracking, ingest_player, ingest_shared, inference_signature
 from .models import ModelRegistry
 from .rally import build_manifest
-from .ranker import rank
+from .ranker import rank, shortlist, rule_decision
 from .schemas import validate_decision
 from .illustrated import asset_paths, prepare_brand
 
@@ -80,6 +80,12 @@ def main(argv=None):
     parser.add_argument('--inference-mode',choices=['shared','independent'],default='shared')
     parser.add_argument('--analysis-cache-dir',type=Path,default=ROOT/'runs/.analysis-cache')
     parser.add_argument('--no-analysis-cache',action='store_true',help='强制重新推理，不复用全场分析缓存')
+    parser.add_argument('--pipeline-depth',type=int,choices=range(1,5),default=1)
+    parser.add_argument('--auxiliary-device',help='辅助球检测设备，须属于 --devices')
+    parser.add_argument('--vball-engine',choices=['ort','ort-bound'],default='ort')
+    parser.add_argument('--preview-scope',choices=['needed','all'],default='needed')
+    parser.add_argument('--preview-workers',type=int,choices=range(1,5),default=2)
+    parser.add_argument('--render-workers',type=int,choices=range(1,5),default=1)
     parser.add_argument('--device',choices=['auto','cpu','cuda','cuda:0','cuda:1','cuda:2','cuda:3'],default='auto')
     from .gpu_stages import parse_devices
     parser.add_argument('--devices',type=parse_devices,
@@ -95,6 +101,12 @@ def main(argv=None):
     parser.add_argument('--stop-after',choices=['manifest','rank','render'],default='render')
     parser.add_argument('--rerun-from',choices=['inference','analytics','tracking','player','rallies','previews','rank','render','verify'])
     args=parser.parse_args(argv)
+    if args.auxiliary_device and (not args.devices or args.auxiliary_device not in args.devices):
+        parser.error('--auxiliary-device 必须属于 --devices')
+    performance={'pipeline_depth':args.pipeline_depth,'auxiliary_device':args.auxiliary_device,'vball_engine':args.vball_engine}
+    if (args.inference_mode!='shared' or args.evidence_cache or args.analytics_cache or args.tracking_cache) and (
+            args.pipeline_depth!=1 or args.auxiliary_device or args.vball_engine!='ort'):
+        parser.error('推理优化选项仅适用于共享新鲜推理/共享缓存')
     if args.devices and (args.device!='auto' or args.inference_mode!='shared' or
                          args.evidence_cache or args.analytics_cache or args.tracking_cache):
         parser.error('--devices 仅适用于共享推理，不能与 --device、independent 或显式证据导入同时使用')
@@ -170,11 +182,13 @@ def main(argv=None):
     save_json(directory/'run_config.json',{'video':str(video),'top_k':args.top_k,'focus_player':args.focus_player,
               'analytics_cache':str(analytics_cache) if analytics_cache else None,'tracking_cache':str(tracking_cache) if tracking_cache else None,
               'device':args.device,'devices':args.devices,'config':config,'code':code,'inference_mode':args.inference_mode,
-              'models':str(registry.directory),'analysis_cache_dir':str(args.analysis_cache_dir)})
+              'models':str(registry.directory),'analysis_cache_dir':str(args.analysis_cache_dir),
+              'performance':performance,'preview_scope':args.preview_scope,
+              'preview_workers':args.preview_workers,'render_workers':args.render_workers})
     def cache_sig(path, files):
         return [identity(Path(path)/f) for f in files] if path else None
     if args.inference_mode=='shared' and not analytics_cache and not tracking_cache:
-        signature=inference_signature(meta['identity'],registry,args.device,args.focus_player,config['player_confidence'],args.devices)
+        signature=inference_signature(meta['identity'],registry,args.device,args.focus_player,config['player_confidence'],args.devices,performance)
         force=args.no_analysis_cache or args.rerun_from in ('inference','analytics','tracking','player')
         if force:stages.data['stages'].pop('inference',None)
         result=stages.execute('inference',signature,lambda:ingest_shared(video,directory,registry,signature,args.analysis_cache_dir,force))
@@ -198,11 +212,20 @@ def main(argv=None):
                                 'evidence_code':code['rally_evidence.py'],'source':meta},make_manifest)
     if args.stop_after=='manifest':finish_timing();return
     manifest=read_json(manifest_path)
+    preview_ids=[r['rally_id'] for r in manifest['rallies']]
+    if args.preview_scope=='needed':
+        candidates=shortlist(manifest,args.top_k)
+        if args.ranker=='rules':
+            # Pure deterministic selection, before strict file validation in rank().
+            preview_ids=[r['rally_id'] for r in rule_decision(candidates,args.top_k)['selected']]
+        else:
+            preview_ids=[r['rally_id'] for r in candidates]
     def make_previews():
-        run([args.tracking_python,'-m','volleymole.media_worker','previews','--run',directory],directory/'previews.log')
+        run([args.tracking_python,'-m','volleymole.media_worker','previews','--run',directory,
+             '--workers',args.preview_workers,'--rally-ids',*preview_ids],directory/'previews.log')
         index=read_json(directory/'previews/index.json')
         return str(directory/'previews/index.json'),[directory/'previews/index.json']+[directory/p for p in index['files']]
-    preview_signature={'source':meta['identity'],'samples':[(r['preview_times_sec'],r['preview_frames']) for r in manifest['rallies']],
+    preview_signature={'source':meta['identity'],'samples':[(r['preview_times_sec'],r['preview_frames']) for r in manifest['rallies'] if r['rally_id'] in preview_ids],
                        'code':functions_digest(APP/'media_worker.py',{'previews','frame_at'})}
     stages.execute('previews',preview_signature,make_previews)
     decision=stages.execute('rank',{'manifest':digest(manifest_path),'k':args.top_k,'focus':args.focus_player,'ranker':args.ranker,
@@ -212,11 +235,13 @@ def main(argv=None):
                             lambda:rank(manifest,directory,args.top_k,args.focus_player,args.ranker,args.api_base,args.model,args.api_timeout,args.vision_model))
     if args.stop_after=='rank':finish_timing();return
     def make_video():
-        run([args.tracking_python,'-m','volleymole.media_worker','render','--run',directory,'--font',args.font,'--style',args.style],directory/f'render{suffix}.log')
+        run([args.tracking_python,'-m','volleymole.media_worker','render','--run',directory,'--font',args.font,'--style',args.style,
+             '--workers',args.render_workers],directory/f'render{suffix}.log')
         report=read_json(directory/f'render_report{suffix}.json')
         return report['output'],[report['output'],directory/f'render_report{suffix}.json']+[c['path'] for c in report.get('segments',report['clips'])]
     if args.style=='lively':prepare_brand()
     output=stages.execute(render_stage,{'decision':digest(decision),'manifest':digest(manifest_path),'code':code['media_worker.py'],
+                          'render_workers':args.render_workers,
                           'presentation':code['presentation.py'],'camera':code['camera.py'],'style':args.style,
                           'illustrated':code['illustrated.py'],
                           'assets':[identity(p) for p in asset_paths()] if args.style=='lively' else [],

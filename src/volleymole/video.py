@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import islice
+from time import perf_counter
 import numpy as np
 
 from .common import probe
@@ -29,7 +30,7 @@ class FramePacket:
                 'source_time_s': self.source_sec, 'time_s': self.time_sec}
 
 
-def decode(video, *, max_frames=None):
+def decode(video, *, max_frames=None, timings=None):
     import av
     import cv2
     meta = probe(video)
@@ -42,7 +43,16 @@ def decode(video, *, max_frames=None):
         frames = container.decode(stream)
         if max_frames is not None:
             frames = islice(frames, max_frames)
-        for frame in frames:
+        frames = iter(frames)
+        while True:
+            started = perf_counter()
+            try:
+                frame = next(frames)
+            except StopIteration:
+                break
+            if timings is not None:
+                timings.add('decode', perf_counter() - started)
+            started = perf_counter()
             if frame.pts is None or frame.time_base is None:
                 raise ValueError(f'Frame {count} has no presentation timestamp')
             when = frame.pts * frame.time_base
@@ -55,6 +65,8 @@ def decode(video, *, max_frames=None):
                     180: cv2.ROTATE_180, 270: cv2.ROTATE_90_CLOCKWISE}[meta['rotation']])
             if pixels.shape[:2] != (meta['height'], meta['width']):
                 raise ValueError('Decoded dimensions disagree with display rotation')
+            if timings is not None:
+                timings.add('decode_to_bgr', perf_counter() - started)
             yield FramePacket(count, frame.pts, Fraction(frame.time_base), meta['start_sec'], pixels)
             count += 1
     if not count:
