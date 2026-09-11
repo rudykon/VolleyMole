@@ -13,7 +13,10 @@ INK = (13, 22, 40)
 CREAM = (255, 246, 223)
 
 
-def lively_title(item):
+def lively_title(item,title_template='legacy'):
+    if title_template!='legacy':
+        from .title_templates import display_title
+        return display_title(item,title_template)
     title = item['title']
     if '极低' in title: return '贴地救球！太拼了'
     if '低姿' in title: return '压低重心，这球我来！'
@@ -38,11 +41,13 @@ def peak_window(item, rally, length=2.0):
             'rally_id': item['rally_id'], 'rank': item['rank']}
 
 
-def build_timeline(decision, manifest):
+def build_timeline(decision, manifest,title_template='legacy',transition_style='fade'):
+    from .transitions import validate_style
+    validate_style(transition_style)
     by_id = {r['rally_id']: r for r in manifest['rallies']}
     segments = []
     def add(kind, frames, **data):
-        data['rank_label']=rank_label(data.get('rank',data.get('next_rank')),len(decision['selected']))
+        data['rank_label']=rank_label(data.get('rank',data.get('next_rank')),len(decision['selected']),title_template)
         segments.append(dict(kind=kind, output_frames=frames, duration_sec=frames/FPS, **data))
     # Five one-second highlights, followed by readable full-screen title cards.
     for item in reversed(decision['selected'][:5]):
@@ -51,8 +56,8 @@ def build_timeline(decision, manifest):
         add('teaser', 30, playback_rate=1., **window)
     for item in reversed(decision['selected']):
         add('transition', TRANSITION_FRAMES, next_rank=item['rank'],top_k=len(decision['selected']),
-            original_title=item['title'],display_title=lively_title(item),
-            illustration=illustration_for(item).name,
+            original_title=item['title'],display_title=lively_title(item,title_template),
+            illustration=illustration_for(item).name,transition_style=transition_style,
             title_hold_sec=(TRANSITION_FRAMES-2*TRANSITION_RAMP_FRAMES)/FPS)
         frames = math.ceil((item['clip_end_sec']-item['clip_start_sec'])*FPS-1e-6)
         add('rally', frames, rank=item['rank'], rally_id=item['rally_id'], playback_rate=1.,
@@ -71,6 +76,14 @@ def build_timeline(decision, manifest):
 
 def validate_timeline(report, decision):
     segments=report['segments'];offset=0
+    from .design_suites import get_suite
+    suite=get_suite(report.get('design_suite','custom'))
+    if suite:
+        language=report.get('design_language','zh')
+        if (report.get('art_theme'),report.get('title_template'),report.get('transition_style'))!=(suite.art,suite.template(language),suite.transition):
+            raise ValueError('设计套装的插画、标题或转场配置不一致')
+        if any(s.get('design_suite')!=suite.name for s in segments):
+            raise ValueError('时间线设计套装与报告不一致')
     expected={r['rank']:r for r in decision['selected']}
     if [s['rank'] for s in segments if s['kind']=='rally']!=list(reversed(expected)):
         raise ValueError('完整回合数量或倒计时顺序错误')
@@ -81,13 +94,17 @@ def validate_timeline(report, decision):
     if sum(s['output_frames'] for s in segments if s['kind']=='teaser')!=150:
         raise ValueError('快切片头必须为5秒')
     transitions=[s for s in segments if s['kind']=='transition']
+    from .transitions import validate_style
+    transition_style=validate_style(report.get('transition_style','fade'))
+    if any(s.get('transition_style','fade')!=transition_style for s in transitions):
+        raise ValueError('转场风格与渲染报告不一致')
     if [s['next_rank'] for s in transitions]!=list(reversed(expected)):
         raise ValueError('每个完整回合前必须有可读的标题转场')
     if any(s['output_frames']!=TRANSITION_FRAMES or s['title_hold_sec']<2 for s in transitions):
         raise ValueError('转场必须为3秒，标题完整展示不少于2秒')
     for segment in segments:
         number=segment.get('rank',segment.get('next_rank'))
-        if segment.get('rank_label')!=rank_label(number,len(expected)):
+        if segment.get('rank_label')!=rank_label(number,len(expected),report.get('title_template','legacy')):
             raise ValueError('回合或转场名次标识与实际排名不一致')
         if segment['timeline_start_frame']!=offset or abs(segment['timeline_start_sec']-offset/FPS)>1e-6:
             raise ValueError('成片时间线不连续')
@@ -104,62 +121,79 @@ def validate_timeline(report, decision):
     if abs(report['expected_duration_sec']-offset/FPS)>1e-6:raise ValueError('成片总长与时间线不符')
 
 
-def lively_headers(item, font_path, top_k):
+def lively_headers(item, font_path, top_k, art_theme='default',title_template='legacy',design_suite='custom'):
     from .illustrated import headers
-    return headers(item,font_path,top_k,lively_title(item))
+    return headers(item,font_path,top_k,lively_title(item,title_template),art_theme,title_template,design_suite)
 
 
-def overlay_asset(path, kind, font_path, index=0):
+def overlay_asset(path, kind, font_path, index=0, art_theme='default',title_template='legacy',design_suite='custom'):
     from .illustrated import overlay
-    return overlay(path,kind,font_path,index)
+    return overlay(path,kind,font_path,index,art_theme,title_template,design_suite)
 
 
-def effect_clip(source, path, segment, relative_start, overlay):
+def effect_clip(source, path, segment, relative_start, overlay,design_suite='custom',quality='720p'):
+    from .quality import get_quality
+    q=get_quality(quality)
+    top=round(110*q.width/720);bottom=round(875*q.width/720)
     rate = segment['playback_rate']; duration = segment['duration_sec']
     span = segment['source_end_sec']-segment['source_start_sec']
     # Teasers are taken from a rendered rally, whose top area also carries its
     # rank header.  Replace that area with live court pixels before applying
     # the transparent teaser lettering, so no second title shows through.
     clean_teaser = ('[base]split=2[base_video][court_source];'
-                    '[court_source]crop=720:765:0:110,scale=720:875[court];'
+                    f'[court_source]crop={q.width}:{bottom-top}:0:{top}:exact=1,scale={q.width}:{bottom}[court];'
                     '[base_video][court]overlay=0:0:shortest=1[v];'
                     if segment['kind']=='teaser' else '[base]null[v];')
+    ui=f'[1:v]scale={q.width}:{q.height}:flags=lanczos,format=rgba'+(',fade=t=in:st=0:d=0.12:alpha=1' if design_suite!='custom' else '')+'[ui];'
     graph = (f'[0:v]setpts=(PTS-STARTPTS)/{rate},fps=30,tpad=stop_mode=clone:stop_duration=1,'
              f'trim=end_frame={segment["output_frames"]},setsar=1[base];'
              f'{clean_teaser}'
-             '[v][1:v]overlay=0:0:shortest=1,format=yuv420p[outv];'
+             f'{ui}[v][ui]overlay=0:0:shortest=1,format=yuv420p[outv];'
              f'[0:a]asetpts=PTS-STARTPTS,atempo={rate},apad,atrim=duration={duration},'
              f'afade=t=in:d=0.025,afade=t=out:st={max(0,duration-.04)}:d=0.04[outa]')
     subprocess.run(['ffmpeg','-y','-v','error','-threads','2','-ss',str(relative_start),'-t',str(span),'-i',source,
         '-loop','1','-framerate','30','-i',str(overlay),'-filter_complex_threads','2','-filter_complex',graph,
-        '-map','[outv]','-map','[outa]','-t',str(duration),'-r','30','-c:v','libx264','-preset','fast','-crf','20',
+        '-map','[outv]','-map','[outa]','-t',str(duration),'-r','30','-c:v','libx264','-preset','fast','-crf',str(q.crf),
         '-threads','4','-c:a','aac','-ar','48000','-ac','2','-b:a','192k','-movflags','+faststart',str(path)],check=True)
 
 
-def transition_clip(previous, following, path, segment, font_path):
+def transition_clip(previous, following, path, segment, font_path, art_theme='default',title_template='legacy',transition_style='fade',design_suite='custom',quality='720p'):
     from .illustrated import encode_transition
-    return encode_transition(previous,following,path,segment,font_path)
+    return encode_transition(previous,following,path,segment,font_path,art_theme,title_template,transition_style,design_suite,quality)
 
 
-def render_lively(directory, font, workers=1):
+def render_lively(directory, font, workers=1, art_theme='default',title_template='legacy',transition_style='fade',design_suite='custom',quality='1080p'):
+    from .quality import get_quality
+    q=get_quality(quality)
     from concurrent.futures import ThreadPoolExecutor
     from .media_worker import render_clip, concatenate_segments
     from .schemas import validate_decision
     started = time.perf_counter()
+    from .design_suites import palette,design_manifest,hero_path,resolve_design
+    from .title_templates import get_template
+    language=get_template(title_template).language
+    art_theme,title_template,transition_style=resolve_design(design_suite,language,art_theme,title_template,transition_style)
+    theme=palette(art_theme,design_suite)
     prepare_brand()
+    for asset in asset_paths(art_theme,title_template,transition_style,design_suite):
+        if not asset.is_file():raise ValueError(f'缺失内置风格素材：{asset}')
     manifest = read_json(directory/'match_manifest.json'); decision = read_json(directory/'edit_decision.json')
     validate_decision(decision,manifest,directory,len(decision['selected']))
-    segments = build_timeline(decision,manifest)
+    segments = build_timeline(decision,manifest,title_template,transition_style)
+    for segment in segments:
+        segment['design_suite']=design_suite
+        if segment['kind']=='transition' and design_suite!='custom':
+            segment['illustration']=hero_path({'title':segment['original_title']},design_suite).name
     extras = directory/'extras_lively';extras.mkdir(exist_ok=True)
     def render_item(item):
         print(f"活力版 #{item['rank']} {item['rally_id']}",flush=True)
-        try: clip=render_clip(directory,item,manifest,font,style='lively')
+        try: clip=render_clip(directory,item,manifest,font,style='lively',art_theme=art_theme,title_template=title_template,design_suite=design_suite,quality=quality)
         except (ValueError,IndexError) as exc:
-            clip=render_clip(directory,item,manifest,font,center_only=True,style='lively')
+            clip=render_clip(directory,item,manifest,font,center_only=True,style='lively',art_theme=art_theme,title_template=title_template,design_suite=design_suite,quality=quality)
             clip['fallback_error']=type(exc).__name__
-        clip['display_title']=lively_title(item)
-        clip['rank_label']=rank_label(item['rank'],len(decision['selected']))
-        clip['illustration']=illustration_for(item).name
+        clip['display_title']=lively_title(item,title_template)
+        clip['rank_label']=rank_label(item['rank'],len(decision['selected']),title_template)
+        clip['illustration']=(hero_path(item,design_suite) if design_suite!='custom' else illustration_for(item,art_theme)).name
         return clip
     with ThreadPoolExecutor(max_workers=workers) as pool:
         clips=list(pool.map(render_item,reversed(decision['selected'])))
@@ -175,27 +209,31 @@ def render_lively(directory, font, workers=1):
         elif kind in ('teaser','replay'):
             print(f"{kind} #{segment['rank']}",flush=True)
             overlay=extras/f'{kind}_{segment["index"]:02d}.png'
-            overlay_asset(overlay,kind,font,segment['index'])
+            overlay_asset(overlay,kind,font,segment['index'],art_theme,title_template,design_suite)
             path=extras/f'{kind}_{segment["index"]:02d}.mp4'
             base=by_rank[segment['rank']]
-            effect_clip(base['path'],path,segment,segment['source_start_sec']-base['source_start_sec'],overlay)
+            effect_clip(base['path'],path,segment,segment['source_start_sec']-base['source_start_sec'],overlay,design_suite,quality)
             segment['path']=str(path)
         else:
             path=extras/f'transition_{segment["index"]:02d}.mp4'
             previous=segments[segment['index']-1]
-            transition_clip(previous,by_rank[segment['next_rank']],path,segment,font)
+            transition_clip(previous,by_rank[segment['next_rank']],path,segment,font,art_theme,title_template,transition_style,design_suite,quality)
             segment['path']=str(path)
     effects_elapsed=time.perf_counter()-started-base_elapsed
     output=directory/f'top{len(clips)}_lively.mp4'
-    concatenate_segments(segments,output)
+    concatenate_segments(segments,output,quality)
     render_elapsed=time.perf_counter()-started
-    save_json(directory/'render_report_lively.json',{'output':str(output),'style':'lively','design_revision':6,'order':'countdown',
+    save_json(directory/'render_report_lively.json',{'output_quality':q.report(),'output':str(output),'style':'lively','design_revision':10,'order':'countdown',
+        'design_suite':design_suite,'design_language':language,'design_spec':design_manifest(design_suite,language),
+        'transition_style':transition_style,
+        'title_template':title_template,
+        'art_theme':art_theme,'art_theme_label':theme.label,
         'render_workers':workers,
         'font_path':str(font),
         'header_background':'transparent',
         'teaser_header_background':'transparent',
         'replay_caption_background':'transparent',
-        'illustration_assets':[identity(p) for p in asset_paths()],
+        'illustration_assets':[identity(p) for p in asset_paths(art_theme,title_template,transition_style,design_suite)],
         'clips':clips,'segments':segments,'expected_duration_sec':sum(s['output_frames'] for s in segments)/FPS,
         'teaser_duration_sec':sum(s['duration_sec'] for s in segments if s['kind']=='teaser'),
         'replay_speed':REPLAY_SPEED,'render_timing_sec':{'rally_render':round(base_elapsed,3),

@@ -1,0 +1,47 @@
+{
+  "mode": "built-in image_gen",
+  "generated_date": "2026-09-10",
+  "purpose": "Original full-bleed material plates for deterministic animated transitions. PNG originals preserved; motion produced by transitions.py.",
+  "assets": [
+    {
+      "id": "velocity",
+      "label": "竞技斜切",
+      "file": "velocity.png",
+      "sha256": "adf27a2a2ffc61b253b0ab15403a6d715189732c8275ddea83f39f3124f2c512",
+      "generation_file": "exec-da0fae5d-19e4-4bd8-818d-3ca940335999.png",
+      "prompt": "Use case: stylized-concept\nAsset type: full-screen material plate for an animated vertical video transition, not a storyboard.\nPrimary request: A premium sports motion-design transition plate: sweeping diagonal ribbons of brushed graphite, warm ivory and a restrained electric vermilion accent. Macro silkscreen grain, finely embossed athletic-fabric texture, sculptural folded ribbon depth, decisive parallel diagonal rhythm, restrained editorial composition. Strong large shapes, no tiny clutter. Crisp tactile printcraft meets broadcast sports art direction.\nComposition: portrait 9:16, edge-to-edge opaque artwork, premium professional motion studio finish. One single cohesive abstract composition. Material detail should remain beautiful at 720x1280. This texture will be revealed through an animated wipe mask, not used as a title background.\nConstraints: no text, letters, numerals, logos, watermark, people, sports balls, interface, frames, borders, collage or multiple panels. Deliver a single full-bleed portrait image."
+    },
+    {
+      "id": "paper",
+      "label": "纸艺翻页",
+      "file": "paper.png",
+      "sha256": "abdec3457eb54476bc44daaa481d2b84c8b586f0b964d98a7ce0f8f899b2b1b8",
+      "generation_file": "exec-4de5e4a1-a38f-42a1-a925-8d7c94b61e47.png",
+      "prompt": "Use case: stylized-concept\nAsset type: full-screen material plate for an animated vertical video transition, not a storyboard.\nPrimary request: An exquisite handcrafted paper-sculpture motion-design transition plate. Broad overlapping curved sheets of warm ivory, muted sage and soft terracotta, with realistic torn fibrous edges, subtle embossed paper grain and beautiful short soft contact shadows. A flowing diagonal page-turn composition, gallery-quality editorial craft photography, understated sophisticated pastel harmony. Not a scrapbook, no stickers or objects.\nComposition: portrait 9:16, edge-to-edge opaque artwork, premium professional motion studio finish. One single cohesive abstract composition. Material detail should remain beautiful at 720x1280. This texture will be revealed through an animated wipe mask, not used as a title background.\nConstraints: no text, letters, numerals, logos, watermark, people, sports balls, interface, frames, borders, collage or multiple panels. Deliver a single full-bleed portrait image."
+    },
+    {
+      "id": "ink",
+      "label": "水墨流动",
+      "file": "ink.png",
+      "sha256": "ff5cbf094451897a32f6aebc072bdd15308620c36c8bced283c6d90e41f440fb",
+      "generation_file": "exec-0f0d0c03-59b5-48d8-80d7-15aa8be92e38.png",
+      "prompt": "Use case: stylized-concept\nAsset type: full-screen material plate for an animated vertical video transition, not a storyboard.\nPrimary request: An elegant contemporary East Asian ink motion-design transition plate: a powerful sweeping sumi ink wash crossing warm handmade rice paper, soft jade pigment diffusion, fine charcoal dry-brush streaks, delicate watery blooms and one restrained muted cinnabar accent. Large abstract organic flowing gesture, sophisticated negative space, exquisite paper fibers, museum-quality tactile ink painting. No landscape, no symbols, no calligraphy.\nComposition: portrait 9:16, edge-to-edge opaque artwork, premium professional motion studio finish. One single cohesive abstract composition. Material detail should remain beautiful at 720x1280. This texture will be revealed through an animated wipe mask, not used as a title background.\nConstraints: no text, letters, numerals, logos, watermark, people, sports balls, interface, frames, borders, collage or multiple panels. Deliver a single full-bleed portrait image."
+    },
+    {
+      "id": "prism",
+      "label": "棱镜折光",
+      "file": "prism.png",
+      "sha256": "f5f7b7853d3ba4c735a39d83a7aa94f1e049af534caf38bd9ae14b9e008558f5",
+      "generation_file": "exec-a2a59ed7-f710-4cd5-8c8e-e2521c3fa162.png",
+      "prompt": "Use case: stylized-concept\nAsset type: full-screen material plate for an animated vertical video transition, not a storyboard.\nPrimary request: A luxury contemporary 3D motion-design transition plate: broad sculptural optical-glass ribbons flowing across a midnight navy backdrop. Pearlescent cyan and soft violet refractive edges, finely frosted glass interior, controlled silver specular highlights, deep elegant studio lighting, subtle caustics. Strong clean curved forms with generous dark breathing room, refined high-end digital art direction, not rainbow noise, not neon gaming graphics.\nComposition: portrait 9:16, edge-to-edge opaque artwork, premium professional motion studio finish. One single cohesive abstract composition. Material detail should remain beautiful at 720x1280. This texture will be revealed through an animated wipe mask, not used as a title background.\nConstraints: no text, letters, numerals, logos, watermark, people, sports balls, interface, frames, borders, collage or multiple panels. Deliver a single full-bleed portrait image."
+    },
+    {
+      "id": "film",
+      "label": "胶片光泄",
+      "file": "film.png",
+      "sha256": "03e2ed59e1659da2be8b67249e10fbba0dd8c8eef256932c15a4e54329be1a01",
+      "generation_file": "exec-55a44be5-da63-486b-ae04-8b07d8fcbffb.png",
+      "prompt": "Use case: stylized-concept\nAsset type: full-screen material plate for an animated vertical video transition, not a storyboard.\nPrimary request: A cinematic analog film light-leak motion-design transition plate. Velvet charcoal darkness with broad organic amber and burnt-orange light leaks flowing from edges, luminous warm cream diffusion, delicate authentic fine 35mm film grain and soft halation. Abstract photographic exposure only, sophisticated restrained warm cinema mood, asymmetrical large sweeping bands, tactile analog imperfection. No filmstrip borders, no sprocket holes, no photos or objects.\nComposition: portrait 9:16, edge-to-edge opaque artwork, premium professional motion studio finish. One single cohesive abstract composition. Material detail should remain beautiful at 720x1280. This texture will be revealed through an animated wipe mask, not used as a title background.\nConstraints: no text, letters, numerals, logos, watermark, people, sports balls, interface, frames, borders, collage or multiple panels. Deliver a single full-bleed portrait image."
+    }
+  ]
+}

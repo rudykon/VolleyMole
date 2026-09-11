@@ -11,6 +11,7 @@ llm_api.json
 .agents/
 .codex/
 tools/
+refer/
 data/
 models/
 runs/

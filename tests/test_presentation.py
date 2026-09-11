@@ -44,6 +44,36 @@ class PresentationTests(unittest.TestCase):
             self.assertAlmostEqual(window['source_start_sec'],10.)
             self.assertAlmostEqual(window['source_end_sec'],11.4)
 
+    def test_transition_styles_preserve_timing_and_are_audited(self):
+        from volleymole.transitions import STYLE_IDS
+        decision, original = self.timeline(5)
+        for style in STYLE_IDS:
+            rows = build_timeline(decision, self.manifest, transition_style=style)
+            for row, old in zip(rows, original['segments']):
+                row['path'] = old['path']
+                for key in ('output_frames', 'timeline_start_frame', 'timeline_end_sec'):
+                    self.assertEqual(row[key], old[key])
+            report = dict(original, segments=rows, transition_style=style)
+            validate_timeline(report, decision)
+            next(row for row in rows if row['kind']=='transition')['transition_style']='wrong'
+            with self.assertRaises(ValueError): validate_timeline(report, decision)
+
+    def test_named_suites_are_coherent_and_keep_source_intervals(self):
+        from volleymole.design_suites import SUITES
+        decision,original=self.timeline(5)
+        for suite in SUITES:
+            for lang in ('zh','en'):
+                rows=build_timeline(decision,self.manifest,suite.template(lang),suite.transition)
+                for row,old in zip(rows,original['segments']):
+                    row.update(path=old['path'],design_suite=suite.name)
+                    for key in ('source_start_sec','source_end_sec','output_frames','timeline_start_frame'):
+                        self.assertEqual(row.get(key),old.get(key))
+                report=dict(original,segments=rows,design_suite=suite.name,design_language=lang,
+                            art_theme=suite.art,title_template=suite.template(lang),transition_style=suite.transition)
+                validate_timeline(report,decision)
+                report['transition_style']='fade'
+                with self.assertRaises(ValueError):validate_timeline(report,decision)
+
     def test_rejects_replay_outside_source_and_broken_timeline(self):
         decision,report=self.timeline(5)
         for problem in ('outside','gap','missing_replay','truncated_rally'):

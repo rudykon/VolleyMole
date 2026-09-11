@@ -1,0 +1,12 @@
+{
+  "mode": "built-in image_gen",
+  "generated_date": "2026-09-10",
+  "assets": [
+    {
+      "file": "aurora-ball.png",
+      "sha256": "d3941b3f4effffa15a671dcfa553f11a0c874dbc0b11beb1a71287f0b88865f5",
+      "generation_file": "exec-863400a5-cac4-4862-8a4b-0df7a823ab43.png",
+      "prompt": "Use case: stylized-concept\nAsset type: transparent hero illustration for a premium volleyball video motion identity, to be placed over a very dark midnight navy (#0C1428) title card beside ivory and ice-blue typography.\nPrimary request: one exquisite floating volleyball sculpted from optical glass, unmistakable volleyball curved panel construction, refined pearlescent silver frosted panels alternating with translucent deep indigo glass panels, elegant cyan and restrained lavender refractive seams. Premium motion-design studio quality, physically convincing sculptural highlights, beautiful smooth three-dimensional volume, slight three-quarter orientation. Strong clear silhouette, controlled high contrast for a dark backdrop, luminous edges without a large glow cloud. Original unbranded design.\nComposition: a single large centered ball occupying 78 percent of a square canvas; complete silhouette, comfortable padding, no cropping. Absolutely no floor, shadow plane, pedestal, ribbons, rings, particles or background.\nConstraints: genuinely transparent background with PNG alpha, not black background and not a checkerboard image. Preserve subtle transparent glass and antialiased edge alpha. No text, numbers, logos, watermark or people. One isolated hero object only."
+    }
+  ]
+}

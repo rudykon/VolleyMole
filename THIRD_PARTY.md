@@ -80,4 +80,25 @@ separately from licensing conclusions.
 Artwork retains the existing asset README and generation prompts. The user's
 `volleymole.svg` is included unchanged with its derived PNG; no rights in that
 user-supplied logo are granted by the third-party MIT notices. ZCOOL KuaiLe font
-is bundled with its OFL notice under `assets/fonts/`.
+is bundled with its OFL notice under `assets/fonts/`. The bilingual title
+templates additionally bundle Noto Sans CJK SC Bold, Noto Serif CJK SC Regular,
+Noto Sans Bold/Bold Italic and Noto Serif Regular under SIL OFL 1.1. The SC
+faces were extracted from the installed Noto CJK collections without glyph
+subsetting; Latin font files were copied unchanged. Original font metadata
+is preserved. See `assets/fonts/NOTICE-Noto-CJK.txt` and
+`assets/fonts/NOTICE-Noto-Core.txt` for the distribution notices and font
+license text. These fonts are not relicensed under the project's MIT license.
+
+The five transition material plates in `assets/transitions/` were generated
+individually with Codex's built-in `image_gen` tool, not copied from a motion
+template marketplace. Original PNGs are preserved; prompts and SHA-256 values
+are recorded in that directory's `prompts.json`. The transition code creates
+animation masks and optional alpha-video exports at runtime. This provenance
+record is not a guarantee of exclusive copyright in AI-generated artwork.
+
+The complete design suites reuse those original illustrations and transition
+plates. `assets/design_suites/aurora-ball.png` is an additional transparent
+glass-volleyball illustration generated with the same built-in tool; its
+unaltered PNG, prompt and hash are retained in `assets/design_suites/`.
+Typography, suite layouts, animation masks and generated transition sound
+envelopes are code-native; no third-party motion-template pack is bundled.

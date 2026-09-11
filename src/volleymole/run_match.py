@@ -16,6 +16,11 @@ from .rally import build_manifest
 from .ranker import rank, shortlist, rule_decision
 from .schemas import validate_decision
 from .illustrated import asset_paths, prepare_brand
+from .art_themes import THEME_IDS
+from .title_templates import TEMPLATE_IDS
+from .transitions import STYLE_IDS
+from .design_suites import SUITE_IDS, resolve_design
+from .quality import QUALITY_IDS,DEFAULT_QUALITY,get_quality,report_dimensions
 
 
 def verify(directory, top_k, style='classic', alignment_python=None):
@@ -34,7 +39,7 @@ def verify(directory, top_k, style='classic', alignment_python=None):
         data=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_streams','-show_format','-of','json',str(path)]))
         video=next(s for s in data['streams'] if s['codec_type']=='video')
         audio=next(s for s in data['streams'] if s['codec_type']=='audio')
-        if (video['width'],video['height'])!=(720,1280) or video['codec_name']!='h264':
+        if (video['width'],video['height'])!=report_dimensions(render) or video['codec_name']!='h264':
             raise ValueError('输出不是 H.264 9:16 视频')
         expected_frames=round(item['duration_sec']*30)
         if video['r_frame_rate']!='30/1' or int(video['nb_frames'])!=expected_frames:
@@ -98,9 +103,24 @@ def main(argv=None):
     parser.add_argument('--llm-config',type=Path,default=ROOT/'llm_api.json',help='读取 llm 节点；rank 节点为文本 reranker，不用于生成剪辑单')
     parser.add_argument('--font',default=str(DEFAULT_FONT))
     parser.add_argument('--style',choices=['classic','lively'],default='lively',help='lively：生图插画、手写标题、5秒快切、慢回放与3秒标题转场；classic：原版')
+    parser.add_argument('--art-theme',choices=THEME_IDS,default='default',help='lively 插画与配色套装；default 保留原版手绘')
+    parser.add_argument('--title-template',choices=TEMPLATE_IDS,default='legacy',help='标题设计与文案语言；-zh 中文，-en 英文；legacy 保留原版')
+    parser.add_argument('--transition-style',choices=STYLE_IDS,default='fade',help='动画转场材质与运动风格；fade 保留原版')
+    parser.add_argument('--design-suite',choices=SUITE_IDS,default='custom',help='完整设计套装；优先于插画/标题/转场单项，custom 保留自由搭配')
+    parser.add_argument('--design-language',choices=('zh','en'),default='zh',help='完整套装的文字语言，默认中文')
+    parser.add_argument('--quality',choices=QUALITY_IDS,default=DEFAULT_QUALITY,help='成片画质，默认 1080p；720p 更快，1440p / 2160p 更精细')
     parser.add_argument('--stop-after',choices=['manifest','rank','render'],default='render')
     parser.add_argument('--rerun-from',choices=['inference','analytics','tracking','player','rallies','previews','rank','render','verify'])
     args=parser.parse_args(argv)
+    if args.style!='lively' and args.design_suite!='custom':
+        parser.error('--design-suite 仅用于 --style lively')
+    args.art_theme,args.title_template,args.transition_style=resolve_design(args.design_suite,args.design_language,args.art_theme,args.title_template,args.transition_style)
+    if args.style!='lively' and args.art_theme!='default':
+        parser.error('--art-theme 仅用于 --style lively')
+    if args.style!='lively' and args.title_template!='legacy':
+        parser.error('--title-template 仅用于 --style lively')
+    if args.style!='lively' and args.transition_style!='fade':
+        parser.error('--transition-style 仅用于 --style lively')
     if args.auxiliary_device and (not args.devices or args.auxiliary_device not in args.devices):
         parser.error('--auxiliary-device 必须属于 --devices')
     performance={'pipeline_depth':args.pipeline_depth,'auxiliary_device':args.auxiliary_device,'vball_engine':args.vball_engine}
@@ -147,7 +167,8 @@ def main(argv=None):
         total=time.perf_counter()-invocation_begin
         reused=[r['stage'] for r in stages.current_run if r['status']=='reused']
         data={'started_at_utc':started_at,'finished_at_utc':datetime.now(timezone.utc).isoformat(),
-              'style':args.style,'source_duration_sec':meta['duration_sec'],'total_elapsed_sec':round(total,3),
+              'style':args.style,'art_theme':args.art_theme,'title_template':args.title_template,'transition_style':args.transition_style,'design_suite':args.design_suite,'design_language':args.design_language,'source_duration_sec':meta['duration_sec'],'total_elapsed_sec':round(total,3),
+              'quality':args.quality,'output_quality':get_quality(args.quality).report(),
               'stages':stages.current_run,'reused_stages':reused,
               'preparation_and_bookkeeping_sec':round(max(0,total-sum(r['elapsed_sec'] for r in stages.current_run)),3),
               'output':str(output) if output else None,
@@ -180,11 +201,12 @@ def main(argv=None):
     analytics_cache=args.analytics_cache or cached.get('analytics')
     tracking_cache=args.tracking_cache or cached.get('tracking')
     save_json(directory/'run_config.json',{'video':str(video),'top_k':args.top_k,'focus_player':args.focus_player,
+              'quality':args.quality,
               'analytics_cache':str(analytics_cache) if analytics_cache else None,'tracking_cache':str(tracking_cache) if tracking_cache else None,
               'device':args.device,'devices':args.devices,'config':config,'code':code,'inference_mode':args.inference_mode,
               'models':str(registry.directory),'analysis_cache_dir':str(args.analysis_cache_dir),
               'performance':performance,'preview_scope':args.preview_scope,
-              'preview_workers':args.preview_workers,'render_workers':args.render_workers})
+              'preview_workers':args.preview_workers,'render_workers':args.render_workers,'art_theme':args.art_theme,'title_template':args.title_template,'transition_style':args.transition_style,'design_suite':args.design_suite,'design_language':args.design_language})
     def cache_sig(path, files):
         return [identity(Path(path)/f) for f in files] if path else None
     if args.inference_mode=='shared' and not analytics_cache and not tracking_cache:
@@ -236,15 +258,18 @@ def main(argv=None):
     if args.stop_after=='rank':finish_timing();return
     def make_video():
         run([args.tracking_python,'-m','volleymole.media_worker','render','--run',directory,'--font',args.font,'--style',args.style,
-             '--workers',args.render_workers],directory/f'render{suffix}.log')
+             '--workers',args.render_workers,'--art-theme',args.art_theme,'--title-template',args.title_template,'--transition-style',args.transition_style,
+             '--design-suite',args.design_suite,'--design-language',args.design_language,'--quality',args.quality],directory/f'render{suffix}.log')
         report=read_json(directory/f'render_report{suffix}.json')
         return report['output'],[report['output'],directory/f'render_report{suffix}.json']+[c['path'] for c in report.get('segments',report['clips'])]
     if args.style=='lively':prepare_brand()
     output=stages.execute(render_stage,{'decision':digest(decision),'manifest':digest(manifest_path),'code':code['media_worker.py'],
-                          'render_workers':args.render_workers,
+                          'render_workers':args.render_workers,'art_theme':args.art_theme,'title_template':args.title_template,'transition_style':args.transition_style,
+                          'design_suite':args.design_suite,'design_language':args.design_language,
+                          'quality':args.quality,'quality_code':digest(APP/'quality.py'),
                           'presentation':code['presentation.py'],'camera':code['camera.py'],'style':args.style,
                           'illustrated':code['illustrated.py'],
-                          'assets':[identity(p) for p in asset_paths()] if args.style=='lively' else [],
+                          'assets':[identity(p) for p in asset_paths(args.art_theme,args.title_template,args.transition_style,args.design_suite)] if args.style=='lively' else [],
                           'schema':code['schemas.py'],'font':identity(args.font)},make_video)
     stages.execute(verify_stage,{'output':digest(output),'decision':digest(decision),'report':digest(directory/f'render_report{suffix}.json'),
                              'code':code['run_match.py'],'alignment':code['check_alignment.py'],
