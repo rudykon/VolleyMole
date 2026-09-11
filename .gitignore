@@ -32,6 +32,12 @@ build/
 .uv-cache/
 
 # Models and match media placed outside the usual directories
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.ttf
+*.otf
 *.pt
 *.pth
 *.onnx
