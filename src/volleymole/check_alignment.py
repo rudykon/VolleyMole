@@ -7,6 +7,7 @@ import numpy as np
 from scipy.signal import correlate, correlation_lags
 from .common import read_json, save_json
 from .media_worker import frame_at
+from .sources import source_for
 
 
 def audio_at(path,start,duration=2.):
@@ -27,9 +28,10 @@ def audio_alignment(original,rendered):
 
 def check(directory,style='classic'):
     suffix='_lively' if style=='lively' else ''
-    source=read_json(directory/'match_manifest.json')['source'];report=read_json(directory/f'render_report{suffix}.json')
+    manifest=read_json(directory/'match_manifest.json');report=read_json(directory/f'render_report{suffix}.json')
     results=[];offset=0.
     for clip in report['clips']:
+        source=source_for(manifest,clip['rally_id'])
         offset=clip.get('timeline_start_sec',offset)
         samples=[]
         for relative in (.5,clip['duration_sec']/2,clip['duration_sec']-1.):
@@ -57,6 +59,7 @@ def check(directory,style='classic'):
     effects=[]
     for segment in report.get('segments',[]):
         if segment['kind'] not in ('replay','teaser'):continue
+        source=source_for(manifest,segment['rally_id'])
         samples=[]
         for relative in (segment['duration_sec']*.25,segment['duration_sec']*.65):
             when=segment['source_start_sec']+relative*segment['playback_rate']

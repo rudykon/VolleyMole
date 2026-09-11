@@ -115,7 +115,7 @@ class PresentationTests(unittest.TestCase):
                 changed=copy.deepcopy(report)
                 next(s for s in changed['segments'] if s['kind']==kind)['rank_label']='五佳球 · 第一球'
                 with self.subTest(k=k,kind=kind),self.assertRaises(ValueError):validate_timeline(changed,decision)
-        for rank,k in ((0,5),(6,5),(11,10),(1,7)):
+        for rank,k in ((0,5),(6,5),(11,10),(1,0)):
             with self.assertRaises(ValueError):rank_label(rank,k)
 
     def test_action_artwork_has_distinct_choices(self):

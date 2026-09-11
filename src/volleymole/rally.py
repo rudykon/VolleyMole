@@ -131,17 +131,17 @@ def build_manifest(source, analytics_path, ball_path, pts_path, player_path, dir
         player_samples = [d for d in player.get('detections', []) if a <= d['time_sec'] < b and d['confidence'] >= config['player_confidence']]
         hit_times = {round(d['time_sec'], 3) for d in player_samples}
         focus_ratio = min(1., len(hit_times) * player.get('sample_interval_sec', 1.)/(b-a)) if len(hit_times) >= 2 else 0.
-        features = {'duration': min((b-a)/28, 1), 'flight': min((flight+.75*float(low[s:e].mean()))/.55, 1),
-                    'turns': min(len(turns)/12, 1), 'actions': min(len(events)/5,1),
+        features = {'duration': 0., 'flight': min((flight+.75*float(low[s:e].mean()))/.55, 1),
+                    'turns': 0., 'actions': float(bool(events)),
                     'coverage': coverage, 'participation': min(participating, 1), 'focus': focus_ratio}
         parts = {key: round(config['weights'][key]*v, 3) for key,v in features.items()}
-        # Sparse-player warmup is still audited, with reduced ranking priority.
-        quality = min(1., max(.2, participating/.85)**3)
-        score = round(sum(parts.values())*quality, 2)
+        # Legacy fallback only; event ranking uses evidence-backed dimensions.
+        score = round(sum(parts.values()), 2)
         reasons = []
-        if b-a < config['min_rally_sec']: reasons.append('回合过短')
+        warnings = []
+        if b-a < config['min_rally_sec']: warnings.append('短回合，需要事件复核')
         if b-a > config['max_rally_sec']: reasons.append('过长连续片段，回合边界不确定')
-        if coverage < config['min_visible_ratio']: reasons.append('有效球轨迹不足')
+        if coverage < config['min_visible_ratio']: warnings.append('有效球轨迹不足，需要事件复核')
         if supported < config['min_flight_ratio']: reasons.append('有效运动不足，疑似持球或停顿')
         if not len(good): reasons.append('没有可关联的有效轨迹')
         rid = f'rally_{n:04d}'
@@ -161,7 +161,7 @@ def build_manifest(source, analytics_path, ball_path, pts_path, player_path, dir
                             'supported_motion_ratio':round(supported,4),'low_ball_ratio':round(float(low[s:e].mean()),4)},
                         'state_metrics': dict(Counter(r['state'] for r in records[s:e])),
                         'median_player_count': float(np.median(counts[s:e])), 'rule_score': score, 'score_components': parts,
-                        'eligible': not reasons, 'exclusion_reasons': reasons, 'preview_times_sec': [a, min(b-.1,max(a,peak)), max(a,b-.1)],
+                        'eligible': not reasons, 'exclusion_reasons': reasons, 'discovery_warnings': warnings, 'preview_times_sec': [a, min(b-.1,max(a,peak)), max(a,b-.1)],
                         'preview_frames': [f'previews/{rid}_{label}.jpg' for label in ('start','peak','end')],
                         'evidence': {'analytics_frames': [s,e-1], 'analytics_jsonl': 'analytics/detections.jsonl', 'ball_csv': 'tracking/ball.csv',
                                      'state_agreement': round(float(play[s:e].mean()),4),

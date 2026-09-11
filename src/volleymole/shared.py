@@ -120,7 +120,11 @@ def shared_inference(args, registry, device):
     skipped_visible = skipped_action_ball = 0
     timings.add('model_load', perf_counter()-load_started)
     depth = getattr(args, 'pipeline_depth', 1)
-    batches = chunks(decode(args.video,max_frames=args.max_frames,timings=timings),90)
+    packets = decode(args.video,max_frames=args.max_frames,timings=timings)
+    if getattr(args,'event_frame_cache',None):
+        from .event_frames import tap
+        packets = tap(packets,args.event_frame_cache,args.event_frame_fps)
+    batches = chunks(packets,90)
     with (GPUStages(devices, auxiliary_device=auxiliary_device) if devices else nullcontext()) as workers, \
             (prefetch_batches(batches,timings) if depth > 1 else nullcontext(batches)) as batch_source, \
             (args.output/'analytics/detections.jsonl').open('w') as out, \

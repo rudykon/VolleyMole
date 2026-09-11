@@ -165,7 +165,7 @@ class SuiteCard:
         self.foreground.alpha_composite(logo,(50,48))
         collection=text_layer(s.collection,16,fg,355,self.template,tracking=1,font_path=FONTS/'NotoSans-Bold.ttf')
         self.foreground.alpha_composite(collection,(672-collection.width,64))
-        label=text_layer(rank_label(item['rank'],top_k,self.template),28,fg,610,self.template)
+        label=text_layer(rank_label(item['rank'],top_k,self.template,item.get('collection','highlights')),28,fg,610,self.template)
         centered=name in ('sumi','aurora','archive')
         self.foreground.alpha_composite(label,((720-label.width)//2 if centered else 42,172))
         lines=title.splitlines()
@@ -228,7 +228,7 @@ def suite_headers(item,top_k,title,name,language='zh'):
     # Compact, flat label rather than a mismatched illustrated ribbon.
     draw.rounded_rectangle((18,24,284,86),radius=2 if name!='aurora' else 9,fill=s.ink)
     draw.rectangle((18,24,23,86),fill=s.accent)
-    label=text_layer(rank_label(item['rank'],top_k,template),26,s.paper,247,template)
+    label=text_layer(rank_label(item['rank'],top_k,template,item.get('collection','highlights')),26,s.paper,247,template)
     canvas.alpha_composite(label,(27+(247-label.width)//2,55-label.height//2))
     heading=text_layer(title.splitlines()[0],32,s.paper,396,template,outline=s.ink)
     canvas.alpha_composite(heading,(301,14))

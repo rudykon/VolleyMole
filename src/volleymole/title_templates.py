@@ -189,7 +189,7 @@ def title_card(item,title,font_path,top_k,art_theme,name):
     if dark:draw.rounded_rectangle((42,35,374,135),radius=8,fill=paper)
     logo_x=(720-logo.width)//2 if style in ('cinema','pop','minimal') else 54
     canvas.alpha_composite(logo,(logo_x,43))
-    label=rank_label(item['rank'],top_k,name)
+    label=rank_label(item['rank'],top_k,name,item.get('collection','highlights'))
     label_layer=text_layer(label,28,foreground,595,name)
     x=(720-label_layer.width)//2 if style in ('cinema','pop','minimal') else 52
     canvas.alpha_composite(label_layer,(x,162 if not dark else 150))

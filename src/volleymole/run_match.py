@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""VolleyMole: a sequential, resumable rally -> ranking -> video pipeline."""
+"""VolleyMole: resumable full-match event understanding and shared dual collections."""
 import argparse
 import fcntl
 import json
@@ -68,12 +68,24 @@ def verify(directory, top_k, style='classic', alignment_python=None):
     return str(directory/f'verification{suffix}.json'),artifacts
 
 
-def main(argv=None):
-    invocation_begin=time.perf_counter()
-    started_at=datetime.now(timezone.utc).isoformat()
+def argument_parser():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--video',type=Path,required=True)
     parser.add_argument('--top-k',type=int,choices=(5,10),default=5)
+    parser.add_argument('--collection',choices=('highlights','bloopers','both'),default='highlights')
+    parser.add_argument('--semantic-concurrency',type=int,choices=range(1,17),default=6)
+    parser.add_argument('--analysis-timeout',type=float,default=1800,help='事件发现与复核共用墙钟预算（秒），从本地推理前启动计时')
+    parser.add_argument('--semantic-retries',type=int,choices=range(3),default=1)
+    parser.add_argument('--event-chunk-sec',type=float,default=24)
+    parser.add_argument('--event-overlap-sec',type=float,default=4)
+    parser.add_argument('--coarse-fps',type=float,default=2)
+    parser.add_argument('--review-fps',type=float,default=8)
+    parser.add_argument('--max-review-sec',type=float,default=90)
+    parser.add_argument('--semantic-modality',choices=('frames-audio','frames'),default='frames-audio',
+                        help='显式采样的视频帧序列＋同步 WAV；frames 用于不支持音频的服务并记录声音未知')
+    parser.add_argument('--sound-model',type=Path,help='本地 TorchScript framewise 声音事件模型（32 kHz）')
+    parser.add_argument('--sound-labels',type=Path,help='声音模型类别顺序 JSON 数组')
+    parser.add_argument('--event-frame-cache',type=Path,help=argparse.SUPPRESS)
     parser.add_argument('--focus-player',type=int)
     parser.add_argument('--format',choices=['vertical'],default='vertical')
     parser.add_argument('--output',type=Path)
@@ -111,7 +123,26 @@ def main(argv=None):
     parser.add_argument('--quality',choices=QUALITY_IDS,default=DEFAULT_QUALITY,help='成片画质，默认 1080p；720p 更快，1440p / 2160p 更精细')
     parser.add_argument('--stop-after',choices=['manifest','rank','render'],default='render')
     parser.add_argument('--rerun-from',choices=['inference','analytics','tracking','player','rallies','previews','rank','render','verify'])
+    return parser
+
+
+def validate_event_arguments(args, parser):
+    import math
+    for key in ('analysis_timeout','api_timeout','event_chunk_sec','coarse_fps','review_fps','max_review_sec'):
+        if not math.isfinite(getattr(args,key)) or getattr(args,key)<=0: parser.error(f'{key} 必须是正有限数')
+    if not 0<=args.event_overlap_sec<args.event_chunk_sec: parser.error('事件重叠必须小于块长且非负')
+    if args.review_fps<args.coarse_fps: parser.error('复核采样率不能低于粗读')
+    if bool(args.sound_model)!=bool(args.sound_labels): parser.error('声音模型与类别文件须一起指定')
+    if args.sound_model and (not args.sound_model.is_file() or not args.sound_labels.is_file()): parser.error('声音模型或类别文件不存在')
+    if args.ranker=='rules' and args.collection!='highlights': parser.error('趣味集锦需要事件理解，请使用 --ranker auto')
+
+
+def main(argv=None):
+    invocation_begin=time.perf_counter()
+    started_at=datetime.now(timezone.utc).isoformat()
+    parser=argument_parser()
     args=parser.parse_args(argv)
+    validate_event_arguments(args, parser)
     if args.style!='lively' and args.design_suite!='custom':
         parser.error('--design-suite 仅用于 --style lively')
     args.art_theme,args.title_template,args.transition_style=resolve_design(args.design_suite,args.design_language,args.art_theme,args.title_template,args.transition_style)
@@ -160,6 +191,11 @@ def main(argv=None):
         config['weights'].update(override.pop('weights',{}));config.update(override)
     for k in ('bin_sec','bridge_gap_sec','min_rally_sec','max_rally_sec','preview_limit'):
         if not isinstance(config[k],(int,float)) or config[k]<=0:parser.error(f'{k} 必须为正数')
+    from .events import DIMENSIONS, WEIGHTS, score_event, number
+    if not number(config['event_score_threshold'],0,100):parser.error('event_score_threshold 必须在 0–100')
+    if not isinstance(config['event_weights'],dict) or set(config['event_weights'])!=set(WEIGHTS):parser.error('event_weights 必须包含双榜')
+    for collection in WEIGHTS:
+        score_event({'dimensions':{k:{'value':None} for k in DIMENSIONS}},collection,config['event_weights'][collection])
     meta=probe(video);meta['identity']=identity(video)
     code={str(p.relative_to(APP)):digest(p) for p in APP.glob('*.py')}
     stages=Stages(directory)
@@ -184,11 +220,17 @@ def main(argv=None):
             rendered=read_json(directory/f'render_report{suffix}.json')
             data['output_duration_sec']=rendered['expected_duration_sec']
             if render_stage not in reused:data['render_breakdown_sec']=rendered.get('render_timing_sec')
+        if discovery is not None and (directory/'event_timeline.json').is_file():
+            event_report=read_json(directory/'event_timeline.json')
+            data['event_analysis']={k:event_report[k] for k in ('coarse_status','coarse_chunks','coarse_completed','review_completed','budget_sec','elapsed_sec','deadline_reached')}
+            if (directory/'collections_report.json').is_file():
+                data['collections']=read_json(directory/'collections_report.json')['collections']
         tag=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
         save_json(directory/'timings'/f'{tag}-{args.style}.json',data)
         save_json(directory/'timing_latest.json',data)
         if output and render_stage not in reused:save_json(directory/f'timing{suffix}.json',data)
         print(f'本次命令耗时：{total:.2f} 秒；复用阶段：{", ".join(reused) or "无"}',flush=True)
+        lock.close()
     if args.rerun_from:
         order=['inference','analytics','tracking','player','rallies','previews','rank',render_stage,verify_stage]
         target={'render':render_stage,'verify':verify_stage}.get(args.rerun_from,args.rerun_from)
@@ -201,7 +243,7 @@ def main(argv=None):
     analytics_cache=args.analytics_cache or cached.get('analytics')
     tracking_cache=args.tracking_cache or cached.get('tracking')
     save_json(directory/'run_config.json',{'video':str(video),'top_k':args.top_k,'focus_player':args.focus_player,
-              'quality':args.quality,
+              'quality':args.quality,'collection':args.collection,
               'analytics_cache':str(analytics_cache) if analytics_cache else None,'tracking_cache':str(tracking_cache) if tracking_cache else None,
               'device':args.device,'devices':args.devices,'config':config,'code':code,'inference_mode':args.inference_mode,
               'models':str(registry.directory),'analysis_cache_dir':str(args.analysis_cache_dir),
@@ -209,31 +251,55 @@ def main(argv=None):
               'preview_workers':args.preview_workers,'render_workers':args.render_workers,'art_theme':args.art_theme,'title_template':args.title_template,'transition_style':args.transition_style,'design_suite':args.design_suite,'design_language':args.design_language})
     def cache_sig(path, files):
         return [identity(Path(path)/f) for f in files] if path else None
-    if args.inference_mode=='shared' and not analytics_cache and not tracking_cache:
-        signature=inference_signature(meta['identity'],registry,args.device,args.focus_player,config['player_confidence'],args.devices,performance)
-        force=args.no_analysis_cache or args.rerun_from in ('inference','analytics','tracking','player')
-        if force:stages.data['stages'].pop('inference',None)
-        result=stages.execute('inference',signature,lambda:ingest_shared(video,directory,registry,signature,args.analysis_cache_dir,force))
-        analytics,tracking,player=(result[k] for k in ('analytics','tracking','player'))
-    else:
-        analytics=stages.execute('analytics',{'source':meta['identity'],'cache':cache_sig(analytics_cache,['summary.json','detections.jsonl']),
-                            'worker':code,'models':registry.entries,'adapter':code['adapters.py'],'python':args.analytics_python,'device':args.device},
-                            lambda:ingest_analytics(video,directory,analytics_cache,args.analytics_python,args.device))
-        tracking=stages.execute('tracking',{'source':meta['identity'],'cache':cache_sig(tracking_cache,['ball.csv','source_pts.csv','provenance.json']),
-                           'adapter':code,'models':registry.entries,'python':args.tracking_python,'device':args.device},
-                           lambda:ingest_tracking(video,directory,tracking_cache,args.tracking_python,args.device))
-        player=stages.execute('player',{'source':meta['identity'],'number':args.focus_player,'threshold':config['player_confidence'],
-                         'worker':code,'models':registry.entries,'adapter':code['adapters.py'],'python':args.player_python,'device':args.device},
-                         lambda:ingest_player(video,directory,args.focus_player,args.player_python,args.device,config['player_confidence']))
-    def make_manifest():
-        data,files=build_manifest(meta,analytics,tracking,directory/'tracking/source_pts.csv',player,directory,config,
-                                 {k:read_json(directory/k/'provenance.json') for k in ('analytics','tracking','player')})
-        return str(directory/'match_manifest.json'),files
-    manifest_path=stages.execute('rallies',{'analytics':digest(analytics),'tracking':digest(tracking),'pts':digest(directory/'tracking/source_pts.csv'),
-                                'player':digest(player),'config':config,'code':code['rally.py'],
-                                'evidence_code':code['rally_evidence.py'],'source':meta},make_manifest)
-    if args.stop_after=='manifest':finish_timing();return
-    manifest=read_json(manifest_path)
+    discovery = None
+    frame_cache = args.event_frame_cache
+    if args.ranker != 'rules' and args.stop_after != 'manifest':
+        from .event_pipeline import Discovery
+        if args.inference_mode=='shared' and not analytics_cache and not tracking_cache and (args.model or args.vision_model) and (os.getenv('VOLLEYMOLE_API_KEY') or os.getenv('OPENAI_API_KEY')):
+            frame_cache = directory/'event_frames'
+            save_json(frame_cache/'status.json', {'status':'pending'})
+        discovery = Discovery(meta, directory, args, frame_cache=frame_cache)
+        print('[events] 全场分块粗读与本地推理并行启动', flush=True)
+    try:
+        if args.inference_mode=='shared' and not analytics_cache and not tracking_cache:
+            signature=inference_signature(meta['identity'],registry,args.device,args.focus_player,config['player_confidence'],args.devices,performance)
+            force=args.no_analysis_cache or args.rerun_from in ('inference','analytics','tracking','player')
+            if force:stages.data['stages'].pop('inference',None)
+            try:
+                result=stages.execute('inference',signature,lambda:ingest_shared(video,directory,registry,signature,args.analysis_cache_dir,force,frame_cache,args.review_fps))
+            finally:
+                if frame_cache and read_json(frame_cache/'status.json')['status'] != 'complete':
+                    save_json(frame_cache/'status.json', {'status':'unavailable'})
+            analytics,tracking,player=(result[k] for k in ('analytics','tracking','player'))
+        else:
+            analytics=stages.execute('analytics',{'source':meta['identity'],'cache':cache_sig(analytics_cache,['summary.json','detections.jsonl']),
+                                'worker':code,'models':registry.entries,'adapter':code['adapters.py'],'python':args.analytics_python,'device':args.device},
+                                lambda:ingest_analytics(video,directory,analytics_cache,args.analytics_python,args.device))
+            tracking=stages.execute('tracking',{'source':meta['identity'],'cache':cache_sig(tracking_cache,['ball.csv','source_pts.csv','provenance.json']),
+                               'adapter':code,'models':registry.entries,'python':args.tracking_python,'device':args.device},
+                               lambda:ingest_tracking(video,directory,tracking_cache,args.tracking_python,args.device))
+            player=stages.execute('player',{'source':meta['identity'],'number':args.focus_player,'threshold':config['player_confidence'],
+                             'worker':code,'models':registry.entries,'adapter':code['adapters.py'],'python':args.player_python,'device':args.device},
+                             lambda:ingest_player(video,directory,args.focus_player,args.player_python,args.device,config['player_confidence']))
+        def make_manifest():
+            data,files=build_manifest(meta,analytics,tracking,directory/'tracking/source_pts.csv',player,directory,config,
+                                     {k:read_json(directory/k/'provenance.json') for k in ('analytics','tracking','player')})
+            return str(directory/'match_manifest.json'),files
+        manifest_path=stages.execute('rallies',{'analytics':digest(analytics),'tracking':digest(tracking),'pts':digest(directory/'tracking/source_pts.csv'),
+                                    'player':digest(player),'config':config,'code':code['rally.py'],
+                                    'evidence_code':code['rally_evidence.py'],'source':meta},make_manifest)
+        if args.stop_after=='manifest':finish_timing();return
+        manifest=read_json(manifest_path)
+    except BaseException:
+        if discovery is not None: discovery.close()
+        lock.close()
+        raise
+    if discovery is not None:
+        from .event_pipeline import complete_collections
+        timeline = discovery.finish(manifest)
+        complete_collections(args, manifest, timeline, directory)
+        finish_timing()
+        return
     preview_ids=[r['rally_id'] for r in manifest['rallies']]
     if args.preview_scope=='needed':
         candidates=shortlist(manifest,args.top_k)
@@ -267,12 +333,14 @@ def main(argv=None):
                           'render_workers':args.render_workers,'art_theme':args.art_theme,'title_template':args.title_template,'transition_style':args.transition_style,
                           'design_suite':args.design_suite,'design_language':args.design_language,
                           'quality':args.quality,'quality_code':digest(APP/'quality.py'),
+                          'sources_code':digest(APP/'sources.py'),
                           'presentation':code['presentation.py'],'camera':code['camera.py'],'style':args.style,
                           'illustrated':code['illustrated.py'],
                           'assets':[identity(p) for p in asset_paths(args.art_theme,args.title_template,args.transition_style,args.design_suite)] if args.style=='lively' else [],
                           'schema':code['schemas.py'],'font':identity(args.font)},make_video)
     stages.execute(verify_stage,{'output':digest(output),'decision':digest(decision),'report':digest(directory/f'render_report{suffix}.json'),
                              'code':code['run_match.py'],'alignment':code['check_alignment.py'],
+                             'sources_code':digest(APP/'sources.py'),
                              'title_cards':digest(APP/'check_title_cards.py') if args.style=='lively' else None},
                    lambda:verify(directory,args.top_k,args.style,args.tracking_python))
     finish_timing(output)

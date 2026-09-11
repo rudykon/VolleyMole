@@ -48,22 +48,24 @@ def illustration_for(item,art_theme='default'):
     return ART_ROOT/'volley_ball.png'
 
 
-def rank_label(rank,top_k,title_template='legacy'):
-    if top_k not in (5,10) or not 1<=rank<=top_k:
-        raise ValueError('名次必须在五佳球或十佳球范围内')
+def rank_label(rank,top_k,title_template='legacy',collection='highlights'):
+    if type(top_k) is not int or not 1<=top_k<=10 or type(rank) is not int or not 1<=rank<=top_k:
+        raise ValueError('名次必须在实际入选数量范围内')
+    if collection=='bloopers':
+        return f'BLOOPERS / NO. {rank:02d}' if get_template(title_template).language=='en' else f'趣味时刻 · 第{rank}段'
     if get_template(title_template).language=='en':return f'TOP {top_k} / NO. {rank:02d}'
     chinese=('','一','二','三','四','五','六','七','八','九','十')
     return f'{chinese[top_k]}佳球 · 第{chinese[rank]}球'
 
 
-def rank_badge(rank,top_k,width,art_theme='default',title_template='legacy'):
+def rank_badge(rank,top_k,width,art_theme='default',title_template='legacy',collection='highlights'):
     theme=get_theme(art_theme)
     badge=sticker(theme.root/'rank_ribbon.png',(width,round(width/3)))
     # New ribbon motifs occupy both ends: keep the code-native text inside the
     # common blank center, without the original artwork's asymmetric offset.
     text_fraction=.71 if art_theme=='default' else .54
     offset=round(badge.width*.025) if art_theme=='default' else 0
-    label=lettering(rank_label(rank,top_k,title_template),round(width*.086),theme.ink,round(badge.width*text_fraction),title_template=title_template)
+    label=lettering(rank_label(rank,top_k,title_template,collection),round(width*.086),theme.ink,round(badge.width*text_fraction),title_template=title_template)
     badge.alpha_composite(label,((badge.width-label.width)//2+offset,
                                  (badge.height-label.height)//2))
     return badge
@@ -136,7 +138,7 @@ def headers(item,font_path,top_k,title,art_theme='default',title_template='legac
     INK,CREAM,COLORS=theme.ink,theme.cream,theme.colors
     color=COLORS[(item['rank']-1)%len(COLORS)]
     art=sticker(illustration_for(item,art_theme),(64,61))
-    badge=rank_badge(item['rank'],top_k,290,art_theme,title_template)
+    badge=rank_badge(item['rank'],top_k,290,art_theme,title_template,item.get('collection','highlights'))
     line=lettering(title.splitlines()[0],36,CREAM,412,tilt=1,outline=INK,title_template=title_template)
     sub=ImageFont.truetype(str(font_path),18)
     frames=[]
@@ -222,7 +224,7 @@ def title_card(item,title,font_path,top_k,art_theme='default',title_template='le
     prepare_brand()
     logo=sticker(LOGO_PNG,(490,134))
     canvas.alpha_composite(logo,((720-logo.width)//2,21))
-    badge=rank_badge(item['rank'],top_k,620,art_theme)
+    badge=rank_badge(item['rank'],top_k,620,art_theme,collection=item.get('collection','highlights'))
     canvas.alpha_composite(badge,((720-badge.width)//2,151))
     art=sticker(illustration_for(item,art_theme),(580,430))
     canvas.alpha_composite(art,((720-art.width)//2,348+(430-art.height)//2))
@@ -246,7 +248,7 @@ def encode_transition(previous,following,path,segment,font_path,art_theme='defau
     from .media_worker import frame_at
     before=frame_at(previous['path'],max(0,previous['duration_sec']-1/30),q.width,lossless=design_suite!='custom')
     after=frame_at(following['path'],0,q.width,lossless=design_suite!='custom')
-    item={'rank':segment['next_rank'],'title':segment['original_title']}
+    item={'rank':segment['next_rank'],'title':segment['original_title'],'collection':segment.get('collection','highlights')}
     scene=None
     if design_suite!='custom':
         from .design_suites import SuiteCard

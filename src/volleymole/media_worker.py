@@ -12,6 +12,7 @@ from .art_themes import THEME_IDS, get_theme
 from .title_templates import TEMPLATE_IDS, get_template
 from .transitions import STYLE_IDS, validate_style
 from .design_suites import SUITE_IDS, resolve_design, palette
+from .sources import source_for
 
 FONT = str(DEFAULT_FONT)
 
@@ -27,16 +28,16 @@ def frame_at(video, seconds, width=640,lossless=False):
 def previews(directory, rally_ids=None, workers=1):
     from concurrent.futures import ThreadPoolExecutor
     manifest=read_json(directory/'match_manifest.json')
-    video=manifest['source']['path']; outputs=[]
+    outputs=[]
     jobs=[]
     for r in manifest['rallies']:
         if rally_ids is not None and r['rally_id'] not in rally_ids:
             continue
         for when,name in zip(r['preview_times_sec'],r['preview_frames']):
-            jobs.append((when,name))
+            jobs.append((source_for(manifest,r['rally_id'])['path'],when,name))
             outputs.append(name)
     def extract(job):
-        when,name=job
+        video,when,name=job
         path=directory/name;path.parent.mkdir(parents=True,exist_ok=True)
         if not cv2.imwrite(str(path),frame_at(video,when)):
             raise RuntimeError(f'无法保存关键帧：{path}')
@@ -53,7 +54,7 @@ def render_clip(directory, item, manifest, font_path, center_only=False, style='
     from .camera import smooth_values, crop_frame
     r=next(r for r in manifest['rallies'] if r['rally_id']==item['rally_id'])
     track=read_json(directory/r['tracking_json'])
-    source=manifest['source'];w,h=source['width'],source['height']
+    source=source_for(manifest,item['rally_id']);w,h=source['width'],source['height']
     if not Path(source['path']).is_file():
         raise ValueError(f'找不到原片：{source["path"]}')
     start,end=item['clip_start_sec'],item['clip_end_sec']
@@ -93,13 +94,16 @@ def render_clip(directory, item, manifest, font_path, center_only=False, style='
     while draw.textlength(title,font=font)>560:
         font=ImageFont.truetype(str(font_path),font.size-1)
     draw.text((134,18),title,font=font,fill='white')
-    draw.text((135,65),'VOLLEYMOLE  /  日常排球五佳球' if len(read_json(directory/'edit_decision.json')['selected'])==5 else 'VOLLEYMOLE  /  日常排球十佳球',font=small,fill=(169,187,207))
+    decision = read_json(directory/'edit_decision.json')
+    count = len(decision['selected'])
+    caption = '排球趣味时刻' if decision.get('collection') == 'bloopers' else f'日常排球{count}佳球'
+    draw.text((135,65),'VOLLEYMOLE  /  '+caption,font=small,fill=(169,187,207))
     header_array=cv2.cvtColor(np.asarray(header),cv2.COLOR_RGB2BGR)
     lively=None
     if style=='lively':
         from .presentation import lively_headers
         from .illustrated import composite_header
-        lively=lively_headers(item,font_path,len(read_json(directory/'edit_decision.json')['selected']),art_theme,title_template,design_suite)
+        lively=lively_headers(item,font_path,count,art_theme,title_template,design_suite,decision.get('collection','highlights'))
     accent=palette(art_theme,design_suite).colors[1][::-1] if style=='lively' else (54,190,248)
     court_label=None
     if style=='lively' and design_suite!='custom':
@@ -170,6 +174,8 @@ def render_clip(directory, item, manifest, font_path, center_only=False, style='
         report['header_source_samples']=[{'output_frame':i,'source_sec':start+i/30,
             'crop_left':max(0,min(int(centers[i])-crop_width//2,w-crop_width))}
             for i in sorted({min(15,frames-1),frames//2,max(0,frames-15)})]
+    if 'sources' in manifest:
+        report.update(source_id=r['source_id'],source_set=r['source_set'],source_path=source['path'],time_basis='source-local seconds')
     save_json(out.with_suffix('.json'),report)
     return report
 

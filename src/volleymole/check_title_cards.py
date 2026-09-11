@@ -9,6 +9,7 @@ import numpy as np
 from .common import read_json,save_json
 from .illustrated import headers,rank_label
 from .quality import report_dimensions
+from .sources import source_for
 
 
 def normalized_header(layer,width):
@@ -44,13 +45,13 @@ def check(directory):
     title_template=report.get('title_template','legacy')
     design_suite=report.get('design_suite','custom')
     decision=read_json(directory/'edit_decision.json')
-    source=read_json(directory/'match_manifest.json')['source']
+    manifest=read_json(directory/'match_manifest.json')
     by_rank={item['rank']:item for item in decision['selected']}
     top_k=len(by_rank)
     results=[]
     for segment in report['segments']:
         if segment['kind']!='transition':continue
-        label=rank_label(segment['next_rank'],top_k,title_template)
+        label=rank_label(segment['next_rank'],top_k,title_template,decision.get('collection','highlights'))
         if segment['rank_label']!=label:raise ValueError('转场名次标识不正确')
         card_path=Path(segment['path']).with_suffix('.png')
         card=cv2.imread(str(card_path))
@@ -59,7 +60,7 @@ def check(directory):
         if design_suite!='custom':
             from .design_suites import SuiteCard
             from .title_templates import get_template
-            scene=SuiteCard(by_rank[segment['next_rank']],segment['display_title'],top_k,design_suite,get_template(title_template).language)
+            scene=SuiteCard({**by_rank[segment['next_rank']],'collection':decision.get('collection','highlights')},segment['display_title'],top_k,design_suite,get_template(title_template).language)
             if not np.array_equal(card,scene.frame(45)):raise ValueError('套装标题参考图与设计配置不一致')
         samples=[]
         for relative in (.5,1.5,2.5):
@@ -88,7 +89,7 @@ def check(directory):
             replay_overlay_checks.append({'rank':segment['rank'],'transparent_pixel_ratio':clear_ratio,'status':'passed'})
     # Compare the rank glyphs themselves, not just a mostly unchanged header.
     # Luma avoids falsely rejecting yuv420p chroma subsampling around colorful ink.
-    candidate_layers={rank:headers({'rank':rank,'title':'排球'},report['font_path'],top_k,'VOLLEYBALL',art_theme,title_template,design_suite)[-1]
+    candidate_layers={rank:headers({'rank':rank,'title':'排球','collection':decision.get('collection','highlights')},report['font_path'],top_k,'VOLLEYBALL',art_theme,title_template,design_suite)[-1]
                       for rank in by_rank}
     candidate_layers={rank:normalized_header(layer,output_width) for rank,layer in candidate_layers.items()}
     candidates={rank:cv2.cvtColor(layer,cv2.COLOR_BGRA2GRAY)[30:80,50:260].astype(float)
@@ -98,14 +99,15 @@ def check(directory):
     header_results=[]
     live_background_results=[]
     for clip in report['clips']:
-        item=by_rank[clip['rank']]
+        source=source_for(manifest,clip['rally_id'])
+        item={**by_rank[clip['rank']],'collection':decision.get('collection','highlights')}
         expected=headers(item,report['font_path'],top_k,clip['display_title'],art_theme,title_template,design_suite)[-1]
         if expected.shape!=(110,720,4):raise ValueError('标题层必须保留透明通道')
         expected=normalized_header(expected,output_width)
         opaque=cv2.erode((expected[:,:,3]>=250).astype(np.uint8),np.ones((3,3),np.uint8)).astype(bool)
         clear=cv2.erode((expected[:,:,3]==0).astype(np.uint8),np.ones((5,5),np.uint8)).astype(bool)
         if float(np.mean(clear))<.35:raise ValueError('顶部标题层仍有大面积底板')
-        label=rank_label(clip['rank'],top_k,title_template)
+        label=rank_label(clip['rank'],top_k,title_template,decision.get('collection','highlights'))
         if clip['rank_label']!=label:raise ValueError('回合顶部名次标识不正确')
         for segment in report['segments']:
             if segment['kind'] not in ('rally','replay') or segment['rank']!=clip['rank']:continue
@@ -117,7 +119,7 @@ def check(directory):
             luma_error=float(np.mean(abs(gray-cv2.cvtColor(expected,cv2.COLOR_BGRA2GRAY).astype(float))[opaque]))
             scores=sorted((float(np.mean(((gray[30:80,50:260]-template)**2)[rank_mask])),rank)
                           for rank,template in candidates.items())
-            if luma_error>4 or scores[0][1]!=clip['rank'] or scores[0][0]>150 or scores[0][0]>.5*scores[1][0]:
+            if luma_error>4 or scores[0][1]!=clip['rank'] or scores[0][0]>150 or (len(scores)>1 and scores[0][0]>.5*scores[1][0]):
                 raise ValueError(f'成片回合或回放顶部名次不完整或不匹配：{label}, {luma_error}, {scores[:2]}')
             base_relative=segment['source_start_sec']-clip['source_start_sec']+relative*segment['playback_rate']
             base=frame_at(clip['path'],base_relative,720)[:110]
@@ -125,7 +127,7 @@ def check(directory):
             if background_error>12:raise ValueError('回合或回放顶部未保留源回合画面')
             header_results.append({'kind':segment['kind'],'rank_label':label,'opaque_pixel_mean_absolute_error':error,
                                    'luma_mean_absolute_error':luma_error,'recognized_rank':scores[0][1],
-                                   'rank_template_mse':scores[0][0],'nearest_other_rank_mse':scores[1][0],
+                'rank_template_mse':scores[0][0],'nearest_other_rank_mse':scores[1][0] if len(scores)>1 else None,
                                    'transparent_pixel_ratio':float(np.mean(clear)),'background_match_error':background_error})
         # Reconstruct the camera crop from original footage, independently of the
         # encoded header: transparent must mean live source pixels, not blank black.

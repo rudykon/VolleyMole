@@ -101,6 +101,8 @@ def main(argv=None):
     parser.add_argument('--number', type=int)
     parser.add_argument('--confidence', type=float, default=.75)
     parser.add_argument('--max-frames', type=int, help='smoke test only; never accepted as a full-match cache')
+    parser.add_argument('--event-frame-cache', type=Path, help=argparse.SUPPRESS)
+    parser.add_argument('--event-frame-fps', type=float, default=8, help=argparse.SUPPRESS)
     parser.add_argument('--half', action='store_true')
     parser.add_argument('--pipeline-depth', type=int, choices=range(1,5), default=1)
     parser.add_argument('--auxiliary-device')

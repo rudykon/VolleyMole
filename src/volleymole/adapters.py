@@ -30,7 +30,7 @@ def inference_signature(source, registry, device, number, confidence, devices=No
             'environment':{name:metadata.version(name) for name in packages}}
 
 
-def ingest_shared(video, directory, registry, signature, cache_root, force=False):
+def ingest_shared(video, directory, registry, signature, cache_root, force=False, event_frame_cache=None, event_frame_fps=8):
     """Content-addressed inference cache is independent of top-k, style and API calls."""
     fingerprint = hashlib.sha256(json.dumps(signature,sort_keys=True).encode()).hexdigest()
     cached = Path(cache_root).resolve()/fingerprint
@@ -45,6 +45,8 @@ def ingest_shared(video, directory, registry, signature, cache_root, force=False
         def compute():
             command = [sys.executable,'-m','volleymole.inference','--kind','shared','--video',video,
                 '--output',cached,'--models',registry.directory,'--half']
+            if event_frame_cache:
+                command += ['--event-frame-cache',event_frame_cache,'--event-frame-fps',str(event_frame_fps)]
             command += ['--devices', ','.join(signature['devices'])] if signature.get('devices') else ['--device', signature['device']]
             for name,value in signature.get('performance',{}).items():
                 if value is not None:
@@ -59,6 +61,8 @@ def ingest_shared(video, directory, registry, signature, cache_root, force=False
             artifacts += [cached/name for name in ('summary.json','provenance.json','telemetry.json')]
             return str(cached),artifacts
         state.execute('shared_inference',signature,compute)
+        if event_frame_cache and state.current_run[-1]['status']=='reused':
+            save_json(Path(event_frame_cache)/'status.json',{'status':'unavailable'})
         original = read_json(cached/'provenance.json')
         artifacts = []
         for kind,names in groups.items():

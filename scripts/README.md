@@ -4,6 +4,7 @@
 
 | 脚本 | 用途与前提 |
 | --- | --- |
+| `evaluate_events.py` | 按比赛分区评估候选覆盖率、前五质量、解释与剪辑完整性，以及同条件端到端中位数/P95；需要人工标注和运行记录 |
 | `check_release.py` | 仅使用 Python 标准库；检查待发布文件，支持 `--history` |
 | `preview_art_themes.py` | 无需 GPU、模型或 API，检查透明素材并导出实际标题卡、角标及 HTML 图集 |
 | `preview_title_templates.py` | 十套中英标题与五套插画组合预览；无需 GPU、模型或 API |

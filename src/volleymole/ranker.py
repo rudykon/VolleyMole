@@ -16,14 +16,12 @@ def shortlist(manifest, top_k):
 
 def rule_decision(candidates, top_k):
     selected=[]
-    pool=list(candidates)
+    pool=sorted(candidates,key=lambda r:(-r['rule_score'],r.get('source_id','single'),r['start_sec']))
     while pool and len(selected)<top_k:
-        # Mild time/action diversity penalty; do not invent evidence for variety.
-        def adjusted(r):
-            penalty=sum(3 for s in selected if abs(s['start_sec']-r['start_sec'])<90)
-            penalty+=sum(1 for s in selected if s['actions']==r['actions'])
-            return r['rule_score']-penalty
-        best=max(pool,key=adjusted); selected.append(best); pool.remove(best)
+        best=pool.pop(0)
+        if any(s.get('source_id')==best.get('source_id') and max(s['safe_start_sec'],best['safe_start_sec']) <
+               min(s['safe_end_sec'],best['safe_end_sec']) for s in selected): continue
+        selected.append(best)
     result=[]
     titles=['多拍攻防','连续往返','防守与配合','耐心组织','攻防交锋']
     for rank,r in enumerate(selected,1):

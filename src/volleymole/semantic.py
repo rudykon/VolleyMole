@@ -3,6 +3,10 @@ import base64
 import hashlib
 import json
 import math
+import time
+import io
+import wave
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from pathlib import Path
 from urllib.request import Request, urlopen
 from .common import APP, digest, read_json, save_json
@@ -30,10 +34,22 @@ class ResponseContractError(ValueError):
 
 
 def request_json(endpoint, key, payload, timeout):
+    deadline = time.monotonic()+timeout
     request = Request(endpoint.rstrip('/')+'/chat/completions', data=json.dumps(payload).encode(),
                       headers={'Authorization': 'Bearer '+key, 'Content-Type': 'application/json'})
     with urlopen(request, timeout=timeout) as response:
-        data = json.load(response)
+        chunks, size = [], 0
+        while True:
+            remaining = deadline-time.monotonic()
+            if remaining <= 0: raise TimeoutError('semantic response deadline')
+            sock = getattr(getattr(getattr(response, 'fp', None), 'raw', None), '_sock', None)
+            if sock is not None: sock.settimeout(remaining)
+            chunk = response.read1(65536)
+            if not chunk: break
+            size += len(chunk)
+            if size > 16*1024*1024: raise ResponseContractError('response_too_large')
+            chunks.append(chunk)
+        data = json.loads(b''.join(chunks))
     choice = data['choices'][0]
     if choice['message'].get('refusal'):
         raise ResponseContractError('refused',choice.get('finish_reason'))
@@ -51,6 +67,8 @@ def candidate_fields(rally, full_evidence=False):
     fields = {**{k:rally[k] for k in ('rally_id', 'start_sec', 'end_sec', 'safe_start_sec', 'safe_end_sec',
                                 'duration_sec', 'actions', 'players', 'ball_metrics', 'rule_score')},
             'uncertainty':rally.get('uncertainty',{'note':'No extra fusion audit in this historical candidate.'})}
+    if 'source_id' in rally:
+        fields.update(source_id=rally['source_id'],source_set=rally['source_set'],time_basis='seconds within this set, not whole-match time')
     if full_evidence or 'uncertainty' not in rally:
         return fields
     raw = rally['uncertainty']
@@ -156,3 +174,201 @@ def visual_reviews(candidates, directory, endpoint, model, key, timeout, batch_s
             save_json(path,cached)
         reviews.extend(current);artifacts.append(path);batches.append(cached['request'])
     return reviews, artifacts, batches
+
+
+def sampled_evidence(source, start, end, fps, width=512, audio=None, deadline=None, frame_cache=None):
+    """Explicit PTS-labelled video sequence, avoiding provider-default video FPS.
+
+    Decode once per bounded context; the same frames serve motion measurements
+    and both semantic collections. Audio is cut from the shared 32 kHz waveform.
+    """
+    import av
+    import cv2
+    import numpy as np
+    evidence, content, frames = [], [], []
+    def decode_context():
+        origin = source.get('start_sec', 0.)
+        with av.open(source['path']) as container:
+            stream = container.streams.video[0]
+            container.seek(max(0, int((start+origin)*av.time_base)), backward=True)
+            next_time = start
+            for frame in container.decode(stream):
+                if deadline is not None and time.monotonic() >= deadline: raise TimeoutError('evidence deadline')
+                if frame.pts is None: continue
+                when = float(frame.pts*frame.time_base)-origin
+                if when >= end: break
+                if when+1e-6 < next_time: continue
+                pixels = frame.to_ndarray(format='bgr24')
+                rotation = source.get('rotation', 0)
+                if rotation == 90: pixels = cv2.rotate(pixels, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                elif rotation == 180: pixels = cv2.rotate(pixels, cv2.ROTATE_180)
+                elif rotation == 270: pixels = cv2.rotate(pixels, cv2.ROTATE_90_CLOCKWISE)
+                pixels = cv2.resize(pixels, (width, max(2, round(pixels.shape[0]*width/pixels.shape[1]))))
+                yield when, pixels
+                next_time = start+(math.floor((when-start)*fps+1e-6)+1)/fps
+    sampled = None
+    if frame_cache:
+        from .event_frames import frames as shared_frames
+        sampled = shared_frames(frame_cache, start, end, fps, width, deadline)
+    if sampled is None: sampled = decode_context()
+    for when, pixels in sampled:
+        ok, encoded = cv2.imencode('.jpg', pixels, [cv2.IMWRITE_JPEG_QUALITY, 75])
+        if not ok: raise ValueError('证据编码失败')
+        ref = f'frame_{len(evidence):05d}'
+        evidence.append({'id': ref, 'kind': 'frame', 'start_sec': when, 'end_sec': when})
+        content.extend([{'type': 'text', 'text': f'{ref} source_sec={when:.6f}'},
+            {'type': 'image_url', 'image_url': {'url': 'data:image/jpeg;base64,'+base64.b64encode(encoded).decode(), 'detail': 'low' if width <= 512 else 'high'}}])
+        frames.append((when, cv2.cvtColor(pixels, cv2.COLOR_BGR2GRAY)))
+    if not frames: raise ValueError('上下文没有视频帧')
+    # Reject truncated spools/decodes instead of calling a partial view complete.
+    nominal = source.get('nominal_fps', '30/1')
+    try:
+        from fractions import Fraction
+        source_interval = 1/float(Fraction(nominal))
+    except (ValueError, ZeroDivisionError): source_interval = .1
+    tolerance = max(2/fps, 2*source_interval, .25)
+    if frames[0][0]-start > tolerance or end-frames[-1][0] > tolerance:
+        raise ValueError('实际采样未覆盖请求上下文首尾')
+    if audio is not None:
+        samples = audio[round(start*32000):round(end*32000)]
+        if len(samples):
+            buffer = io.BytesIO()
+            with wave.open(buffer, 'wb') as out:
+                out.setnchannels(1); out.setsampwidth(2); out.setframerate(32000)
+                out.writeframes((np.clip(samples, -1, 1)*32767).astype('<i2').tobytes())
+            evidence.append({'id': 'audio', 'kind': 'audio', 'start_sec': start, 'end_sec': start+len(samples)/32000})
+            content.extend([{'type': 'text', 'text': f'audio begins at source_sec={start}; synchronized WAV'},
+                {'type': 'input_audio', 'input_audio': {'data': base64.b64encode(buffer.getvalue()).decode(), 'format': 'wav'}}])
+    return evidence, content, frames
+
+
+def bounded_map(jobs, function, concurrency, deadline, stopped=None):
+    """Bound queue depth as well as running work; request timeout includes upload.
+
+    Workers receive the same absolute deadline. Never abandon workers writing
+    caches behind the caller; each completes or times out before pool shutdown.
+    """
+    pending, results, failures = {}, [], []
+    iterator = iter(jobs)
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        exhausted = False
+        while pending or not exhausted:
+            while not exhausted and len(pending) < concurrency and time.monotonic() < deadline and not (stopped and stopped()):
+                job = next(iterator, None)
+                if job is None: exhausted = True; break
+                pending[pool.submit(function, job)] = job
+            if not pending: break
+            done, _ = wait(pending, timeout=.25, return_when=FIRST_COMPLETED)
+            for future in done:
+                job = pending.pop(future)
+                try: results.append(future.result())
+                except Exception as exc:
+                    # Do not persist provider bodies or secrets in error messages.
+                    from urllib.error import HTTPError
+                    failure = {'job': job['id'], 'status': 'unreviewed', 'error': type(exc).__name__}
+                    if isinstance(exc, HTTPError): failure['http_status'] = exc.code; exc.close()
+                    if isinstance(exc, ResponseContractError): failure['response_contract'] = exc.reason
+                    failures.append(failure)
+            if time.monotonic() >= deadline or (stopped and stopped()): exhausted = True
+    return results, failures
+
+
+def understand_context(job, source, cache, settings, audio, audio_features, deadline, records=None):
+    import fcntl
+    lock_key = hashlib.sha256(json.dumps({'source': source['identity'], 'job': job,
+        'settings': {k:v for k,v in settings.items() if k not in ('key','frame_cache')}}, sort_keys=True).encode()).hexdigest()
+    lock_path = Path(cache)/'locks'/f'{lock_key}.lock'; lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open('a') as lock:
+        while True:
+            try: fcntl.flock(lock, fcntl.LOCK_EX|fcntl.LOCK_NB); break
+            except BlockingIOError:
+                if time.monotonic() >= deadline: raise TimeoutError('semantic cache lock deadline')
+                time.sleep(.1)
+        return _understand_context(job, source, cache, settings, audio, audio_features, deadline, records)
+
+
+def _understand_context(job, source, cache, settings, audio, audio_features, deadline, records=None):
+    from .events import validate_events
+    from .motion_features import camera_transform, relative_motion, ball_motion
+    import bisect
+    import numpy as np
+    prompt = (APP/'prompts/understand_events.md').read_text(encoding='utf-8')
+    signature_data = {'version': 1, 'source': source['identity'], 'job': job,
+        'settings': {k: v for k, v in settings.items() if k not in ('key','frame_cache')}, 'prompt': prompt,
+        'implementation': [digest(APP/name) for name in ('semantic.py', 'events.py', 'audio_events.py', 'motion_features.py', 'event_frames.py')],
+        'local_signature': settings.get('local_signature') if records is not None else None}
+    signature = hashlib.sha256(json.dumps(signature_data, sort_keys=True).encode()).hexdigest()
+    path = Path(cache)/f'{signature}.json'
+    if path.is_file():
+        try:
+            saved = read_json(path)
+            if saved['signature'] == signature:
+                validate_events({'events': saved['events']}, saved['evidence'], job['start'], job['end'])
+                return {**saved, 'cached': True}
+        except (ValueError, KeyError, TypeError): pass
+    fps = settings['coarse_fps'] if job['phase'] == 'coarse' else settings['review_fps']
+    evidence, content, frames = sampled_evidence(source, job['start'], job['end'], fps,
+        512 if job['phase'] == 'coarse' else 768,
+        audio if settings['modality'] == 'frames-audio' else None, deadline, settings.get('frame_cache'))
+    local = {'audio_status': audio_features['status'], 'sound_events': [], 'audio_windows': [], 'motion': []}
+    for i, event in enumerate(audio_features.get('sound_events', [])):
+        if job['start'] <= event['start_sec'] < event['end_sec'] <= job['end']:
+            ref = f'sound_{i}'
+            evidence.append({'id': ref, 'kind': 'sound_event', 'start_sec': event['start_sec'], 'end_sec': event['end_sec']})
+            local['sound_events'].append({**event, 'id': ref})
+    local['audio_windows'] = [w for w in audio_features['windows'] if job['start'] <= w['start_sec'] < job['end']]
+    if records:
+        times = [r['source_time_s']-source.get('start_sec', 0) if 'source_time_s' in r else r['time_s'] for r in records]
+        previous = None
+        for when, gray in frames:
+            pos = min(bisect.bisect_left(times, when), len(times)-1)
+            people = []
+            for p in records[pos].get('players', []):
+                scaled = {**p, 'xyxy': (np.array(p['xyxy'])*gray.shape[1]/source['width']).tolist()}
+                if p.get('keypoints'):
+                    kp = np.array(p['keypoints']); kp[:, :2] *= gray.shape[1]/source['width']; scaled['keypoints'] = kp.tolist()
+                people.append(scaled)
+            ball = records[pos].get('event_ball')
+            if ball is not None: ball = (np.asarray(ball)*gray.shape[1]/source['width']).tolist()
+            if previous:
+                before, old_gray, old_people, old_ball = previous
+                camera = camera_transform(old_gray, gray, [p['xyxy'] for p in old_people])
+                measurement = relative_motion(old_people, people, when-before, camera)
+                movement = ball_motion(old_ball, ball, when-before, camera, people)
+                transient = any(w['transient_candidate'] and w['start_sec']-.15 <= when <= w['end_sec']+.15 for w in local['audio_windows'])
+                measurement['ball'] = movement
+                measurement['touch_hypothesis'] = True if movement['near_wrist'] is True and transient else None
+                ref = f'motion_{len(local["motion"])}'
+                evidence.append({'id': ref, 'kind': 'local_motion', 'start_sec': before, 'end_sec': when,
+                    'measured': measurement['body_lengths_per_sec'] is not None})
+                local['motion'].append({'id': ref, 'time_sec': when, **measurement})
+            previous = (when, gray, people, ball)
+    content.insert(0, {'type': 'text', 'text': json.dumps({'phase': job['phase'], 'context': [job['start'], job['end']],
+        'requested_fps': fps, 'actual_sample_times': [t for t, _ in frames], 'local': local,
+        'candidate': job.get('candidate'), 'evidence': evidence}, ensure_ascii=False)})
+    payload = {'model': settings['model'], 'max_tokens': 8192,
+        'messages': [{'role': 'system', 'content': prompt}, {'role': 'user', 'content': content}],
+        'response_format': {'type': 'json_object'}}
+    began = time.monotonic()
+    for attempt in range(settings['retries']+1):
+        remaining = deadline-time.monotonic()
+        if remaining <= 0: raise TimeoutError('analysis deadline')
+        try:
+            data, metadata = request_json(settings['endpoint'], settings['key'], payload, min(settings['timeout'], remaining))
+            events = validate_events(data, evidence, job['start'], job['end'])
+            break
+        except Exception as exc:
+            from urllib.error import HTTPError, URLError
+            retryable = isinstance(exc, (TimeoutError, URLError))
+            if isinstance(exc, HTTPError):
+                retryable = exc.code == 429 or exc.code >= 500
+                exc.close()
+            if not retryable or attempt == settings['retries']: raise
+            # Finite jitter-free backoff, bounded by the absolute deadline.
+            delay = min(2**attempt, max(0, deadline-time.monotonic()))
+            time.sleep(delay)
+    result = {'signature': signature, 'job': job, 'events': events, 'evidence': evidence,
+        'local': local, 'request': metadata, 'attempts': attempt+1, 'elapsed_sec': time.monotonic()-began,
+        'requested_fps': fps, 'sample_times_sec': [t for t, _ in frames], 'cached': False}
+    save_json(path, result)
+    return result

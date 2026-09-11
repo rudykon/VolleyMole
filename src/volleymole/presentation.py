@@ -30,14 +30,14 @@ def lively_title(item,title_template='legacy'):
 def peak_window(item, rally, length=2.0):
     """Use the candidate keyframe; its peak is a hypothesis, not highlight truth."""
     start, end = item['clip_start_sec'], item['clip_end_sec']
-    peak = rally['preview_times_sec'][1]
+    peak = rally.get('peak_sec', rally['preview_times_sec'][1])
     if not math.isfinite(peak) or not start <= peak <= end:
         peak = (start + end) / 2
     length = min(length, end-start)
     a = min(max(start, peak-length*.6), end-length)
     return {'source_start_sec': a, 'source_end_sec': a+length,
-            'peak_sec': peak, 'peak_evidence': 'candidate_preview_peak',
-            'peak_selection_uncertainty':'Action-detector timestamp or candidate midpoint; not guaranteed the most exciting moment.',
+            'peak_sec': peak, 'peak_evidence': rally.get('peak_evidence', 'candidate_preview_peak'),
+            'peak_selection_uncertainty':'Observed event timestamp; see event evidence.' if 'peak_sec' in rally else 'Action-detector timestamp or candidate midpoint; not guaranteed the most exciting moment.',
             'rally_id': item['rally_id'], 'rank': item['rank']}
 
 
@@ -47,7 +47,8 @@ def build_timeline(decision, manifest,title_template='legacy',transition_style='
     by_id = {r['rally_id']: r for r in manifest['rallies']}
     segments = []
     def add(kind, frames, **data):
-        data['rank_label']=rank_label(data.get('rank',data.get('next_rank')),len(decision['selected']),title_template)
+        data['collection']=decision.get('collection','highlights')
+        data['rank_label']=rank_label(data.get('rank',data.get('next_rank')),len(decision['selected']),title_template,data['collection'])
         segments.append(dict(kind=kind, output_frames=frames, duration_sec=frames/FPS, **data))
     # Five one-second highlights, followed by readable full-screen title cards.
     for item in reversed(decision['selected'][:5]):
@@ -56,7 +57,7 @@ def build_timeline(decision, manifest,title_template='legacy',transition_style='
         add('teaser', 30, playback_rate=1., **window)
     for item in reversed(decision['selected']):
         add('transition', TRANSITION_FRAMES, next_rank=item['rank'],top_k=len(decision['selected']),
-            original_title=item['title'],display_title=lively_title(item,title_template),
+            original_title=item['title'],display_title=item['title'] if decision.get('collection') == 'bloopers' else lively_title(item,title_template),
             illustration=illustration_for(item).name,transition_style=transition_style,
             title_hold_sec=(TRANSITION_FRAMES-2*TRANSITION_RAMP_FRAMES)/FPS)
         frames = math.ceil((item['clip_end_sec']-item['clip_start_sec'])*FPS-1e-6)
@@ -68,6 +69,9 @@ def build_timeline(decision, manifest,title_template='legacy',transition_style='
         add('replay', frames, playback_rate=REPLAY_SPEED, **window)
     offset = 0
     for i, segment in enumerate(segments):
+        if 'sources' in manifest and 'rally_id' in segment:
+            rally=by_id[segment['rally_id']]
+            segment.update(source_id=rally['source_id'],source_set=rally['source_set'],time_basis='source-local seconds')
         segment.update(index=i, timeline_start_frame=offset, timeline_start_sec=offset/FPS)
         offset += segment['output_frames']
         segment['timeline_end_sec'] = offset/FPS
@@ -89,10 +93,11 @@ def validate_timeline(report, decision):
         raise ValueError('完整回合数量或倒计时顺序错误')
     if [s['rank'] for s in segments if s['kind']=='replay']!=list(reversed(expected)):
         raise ValueError('每个回合必须有且只有一次短回放')
-    if [s['kind'] for s in segments[:5]]!=['teaser']*5:
-        raise ValueError('片头必须是五次快速切换')
-    if sum(s['output_frames'] for s in segments if s['kind']=='teaser')!=150:
-        raise ValueError('快切片头必须为5秒')
+    teaser_count = min(5, len(expected))
+    if [s['kind'] for s in segments[:teaser_count]]!=['teaser']*teaser_count:
+        raise ValueError('片头快切数量与实际入选数不符')
+    if sum(s['output_frames'] for s in segments if s['kind']=='teaser')!=30*teaser_count:
+        raise ValueError('快切片头时长与实际入选数不符')
     transitions=[s for s in segments if s['kind']=='transition']
     from .transitions import validate_style
     transition_style=validate_style(report.get('transition_style','fade'))
@@ -104,7 +109,7 @@ def validate_timeline(report, decision):
         raise ValueError('转场必须为3秒，标题完整展示不少于2秒')
     for segment in segments:
         number=segment.get('rank',segment.get('next_rank'))
-        if segment.get('rank_label')!=rank_label(number,len(expected),report.get('title_template','legacy')):
+        if segment.get('rank_label')!=rank_label(number,len(expected),report.get('title_template','legacy'),decision.get('collection','highlights')):
             raise ValueError('回合或转场名次标识与实际排名不一致')
         if segment['timeline_start_frame']!=offset or abs(segment['timeline_start_sec']-offset/FPS)>1e-6:
             raise ValueError('成片时间线不连续')
@@ -121,9 +126,9 @@ def validate_timeline(report, decision):
     if abs(report['expected_duration_sec']-offset/FPS)>1e-6:raise ValueError('成片总长与时间线不符')
 
 
-def lively_headers(item, font_path, top_k, art_theme='default',title_template='legacy',design_suite='custom'):
+def lively_headers(item, font_path, top_k, art_theme='default',title_template='legacy',design_suite='custom', collection='highlights'):
     from .illustrated import headers
-    return headers(item,font_path,top_k,lively_title(item,title_template),art_theme,title_template,design_suite)
+    return headers({**item,'collection':collection},font_path,top_k,item['title'] if collection == 'bloopers' else lively_title(item,title_template),art_theme,title_template,design_suite)
 
 
 def overlay_asset(path, kind, font_path, index=0, art_theme='default',title_template='legacy',design_suite='custom'):
@@ -191,8 +196,8 @@ def render_lively(directory, font, workers=1, art_theme='default',title_template
         except (ValueError,IndexError) as exc:
             clip=render_clip(directory,item,manifest,font,center_only=True,style='lively',art_theme=art_theme,title_template=title_template,design_suite=design_suite,quality=quality)
             clip['fallback_error']=type(exc).__name__
-        clip['display_title']=lively_title(item,title_template)
-        clip['rank_label']=rank_label(item['rank'],len(decision['selected']),title_template)
+        clip['display_title']=item['title'] if decision.get('collection') == 'bloopers' else lively_title(item,title_template)
+        clip['rank_label']=rank_label(item['rank'],len(decision['selected']),title_template,decision.get('collection','highlights'))
         clip['illustration']=(hero_path(item,design_suite) if design_suite!='custom' else illustration_for(item,art_theme)).name
         return clip
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -228,7 +233,7 @@ def render_lively(directory, font, workers=1, art_theme='default',title_template
         'transition_style':transition_style,
         'title_template':title_template,
         'art_theme':art_theme,'art_theme_label':theme.label,
-        'render_workers':workers,
+        'render_workers':workers,'collection':decision.get('collection','highlights'),
         'font_path':str(font),
         'header_background':'transparent',
         'teaser_header_background':'transparent',

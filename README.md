@@ -1,4 +1,5 @@
 <div align="center">
+
   <img src="src/volleymole/assets/branding/volleymole.svg" alt="VolleyMole" width="540">
   <h1>VolleyMole · 排球高光自动剪辑</h1>
   <p>把一整场日常排球比赛，剪成有回合、有排名、有原声的竖屏五佳球或十佳球。</p>
@@ -6,16 +7,18 @@
   <p><a href="#快速开始">快速开始</a> · <a href="#五套插画风格">插画风格</a> · <a href="#四卡加速">四卡加速</a> · <a href="#文档与开发">文档</a> · <a href="#致谢与参考">致谢</a></p>
 </div>
 
+> 自动分析现已使用全场事件理解：`--collection highlights|bloopers|both`。双榜共享粗读、复核与缓存，支持不足数量输出。接口能力、本地声音模型协议和验收方式见 [事件理解与双榜](docs/事件理解与双榜.md)。
+
 ---
 
 ## 从比赛录像到高光成片
 
-VolleyMole 面向单机位排球录像：在本地识别比赛状态、动作、人物和球轨迹，结合多种证据切分回合，再按规则或可选的视觉大模型进行排名，默认输出 **1080 × 1920、30 fps** 的竖屏视频，支持 720p、1440p 和 4K 画质选项。
+VolleyMole 面向单机位排球录像：在本地识别比赛状态、动作、人物和球轨迹，将本地多源测量与全场分块音视频理解合并为事件时间轴，再确定性生成竞技与趣味双榜，默认输出 **1080 × 1920、30 fps** 的竖屏视频，支持 720p、1440p 和 4K 画质选项。
 
 ```text
-比赛录像 → 共享解码与模型分析 → 回合分割 → 排名 → 竖屏渲染 → 音画验证
-                                 ↓                 ↓
-                           可追溯检测证据      五佳球 / 十佳球
+比赛录像 → 共享解码＋全场粗读 → 事件融合与一次复核 → 双榜评分 → 渲染与校验
+                              ↓                  ↓
+                        可追溯事实与证据       五佳球／十佳球＋五大囧
 ```
 
 | 能力 | 说明 |
@@ -23,7 +26,7 @@ VolleyMole 面向单机位排球录像：在本地识别比赛状态、动作、
 | 完整回合 | 保留检测到的回合及前后上下文，记录边界与遮挡的不确定性 |
 | 跟球构图 | 球轨迹引导竖屏裁切，同时保留全场概览 |
 | 活力版呈现 | 5 秒快切片头、中文倒计时排名、插画转场、短慢回放与现场原声 |
-| 两种排名方式 | 纯规则模式无需 API；可选视觉大模型评审，失败时按规则降级 |
+| 两种排名方式 | 自动模式使用事件理解和双榜评分；显式纯规则模式无需 API |
 | 球员关注 | 可按球衣号码记录球员出现证据，OCR 按需启动 |
 | 缓存与恢复 | 按素材、模型和配置校验分析缓存，支持从排名或渲染阶段重做 |
 | 四卡流水线 | 支持跨批推理、辅助检测分卡及独立回合并行渲染 |
@@ -69,6 +72,28 @@ uv sync --locked
 ```
 
 默认成片：`runs/match-top5/top5_lively.mp4`。没有可用 GPU 时可改用 `--device cpu`，推理会更慢。
+
+## 整场十佳球：按日期合并多局（常规用法）
+
+文件命名为 `年.月.日.局号`，例如 `2026.1.6.1.mp4`～`2026.1.6.4.mp4`，会识别为同一场比赛的四局。各局独立分析，再从**整场所有有效回合统一选出十佳球**，不是把各局集锦拼在一起。
+
+```bash
+# 先查看分组，不推理、不生成文件
+.venv/bin/volleymole match --input-dir data/样例视频 --list
+
+# 指定一场，默认十佳球、1080p、中文；自动模式需要配置音视频理解接口
+.venv/bin/volleymole match --input-dir data/样例视频 --date 2026.1.6 \
+  --devices cuda:0,cuda:1,cuda:2,cuda:3 \
+  --pipeline-depth 2 --auxiliary-device cuda:0 --vball-engine ort-bound \
+  --render-workers 2 --design-suite matchday
+
+# 省略 --date：依次为目录内每个日期生成一条整场十佳球
+.venv/bin/volleymole match --input-dir data/样例视频 --device cuda:0
+```
+
+自动模式输出至 `runs/matches/2026-01-06-top10/collections/highlights/`；趣味集锦位于同级 `bloopers/`，默认最多十段竞技素材。显式 `--ranker rules` 保留原输出目录。`--output` 指定所有场次的父目录；英文增加 `--design-language en`，画质和五套模板选项保持一致。原有 `run --video ...` 仍是单视频用法，默认五佳球。
+
+当前样例目录分为 **2026-01-06（4 局）、2026-09-02（3 局）、2026-09-08（3 局）**。局号按数字排序；重复局号、无效日期或不符合命名格式的视频会报错，缺局会提示。更多规则与来源追溯见 [整场多局十佳球](docs/整场多局十佳球.md)。
 
 ## 四卡加速
 
@@ -196,9 +221,11 @@ uv sync --locked
 
 将 [llm_api.example.json](llm_api.example.json) 复制为本地 `llm_api.json`，填写服务地址、模型名称和 API 密钥；该本地文件已被 Git 忽略。也可配置 `VOLLEYMOLE_API_KEY`、`VOLLEYMOLE_API_BASE`、`VOLLEYMOLE_MODEL` 环境变量。
 
-配置后用 `--ranker auto`（或省略 `--ranker`）运行。请求仅包含预筛候选的结构化信息和每回合最多三张缩小截图，**不会上传整场原视频**。接口失败或剪辑单不合法时，会记录错误类别并按规则导出。`--ranker rules` 完全关闭 API 请求。
+配置后用 `--ranker auto`（或省略 `--ranker`）运行，可加 `--collection both`。新链路按块发送**覆盖全场的采样视频帧和同步音频**，并为候选提供一次更密集的上下文复核。失败、超时或证据不足时记录未完成项，使用已获得的有效事件；不伪造结果或凑数。`--ranker rules` 完全关闭 API 请求。接口协议、声音模型接入和缓存说明见 [事件理解与双榜](docs/事件理解与双榜.md)。
 
 ## 输出与可追溯性
+
+自动模式的共用事件保存在 `event_timeline.json`，两类成片分别位于 `collections/highlights/`、`collections/bloopers/`，实际数量和不足原因见 `collections_report.json`。下面为显式规则模式的原有目录：
 
 ```text
 runs/match-top5/
