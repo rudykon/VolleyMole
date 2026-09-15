@@ -1,0 +1,78 @@
+name: Engineering checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: engineering-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-regressions:
+    name: Published core and dual-output regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: src:tests
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install portable test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg fonts-noto-cjk
+          python -m pip install --disable-pip-version-check \
+            numpy==2.3.5 opencv-python-headless==4.13.0.92 pillow==12.3.0 \
+            scipy==1.17.1 av==18.1.0
+          python -m pip install --disable-pip-version-check \
+            --index-url https://download.pytorch.org/whl/cpu \
+            torch==2.11.0 torchvision==0.26.0
+      - name: Run published core and dual-output tests
+        # Generated design PNGs/fonts, real models, GPUs, private videos and API
+        # calls are intentionally outside this public runner's acceptance scope.
+        run: |
+          python -m unittest -v \
+            test_action_evidence \
+            test_action_evidence_export \
+            test_action_evidence_pipeline \
+            test_action_spotting \
+            test_analysis_cache \
+            test_audio_detector \
+            test_auto_blooper_annotations \
+            test_blooper_benchmark \
+            test_event_pipeline \
+            test_events \
+            test_gpu_stages \
+            test_integration_core.RegistryTests \
+            test_integration_core.PacketTests \
+            test_integration_core.JerseyTests \
+            test_match_collection \
+            test_performance \
+            test_pipeline \
+            test_public_audio_eval \
+            test_quality \
+            test_rallies \
+            test_rally_evidence \
+            test_semantic \
+            test_semantic_request_limits \
+            test_shared \
+            test_sound_calibration \
+            test_sound_configuration \
+            test_svhighlights_eval \
+            test_temporal_understanding \
+            test_video_decode \
+            test_volleyball_action_eval \
+            test_volleyball_data_splits
+      - name: Confirm tests did not rewrite tracked files
+        run: git diff --exit-code

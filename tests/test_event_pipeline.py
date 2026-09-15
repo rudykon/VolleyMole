@@ -2,19 +2,52 @@
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from volleymole.common import APP, probe, identity, read_json
-from volleymole.event_pipeline import Discovery, collection_artifacts
+from volleymole.common import APP, probe, identity, read_json, save_json
+from volleymole.event_pipeline import Discovery, collection_artifacts, complete_collections
 from volleymole.run_match import argument_parser
 from volleymole.semantic import sampled_evidence
-from test_events import event
+from test_events import event, timeline_event
 
 
 class PipelineTests(unittest.TestCase):
+    def test_collection_render_runs_source_picture_and_audio_alignment(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);video=root/'source.mp4'
+            subprocess.run(['ffmpeg','-y','-v','error','-f','lavfi','-i',
+                'testsrc2=size=720x405:rate=30:duration=4','-f','lavfi','-i',
+                'sine=frequency=440:sample_rate=48000:duration=4','-c:v','libx264','-threads','1',
+                '-c:a','aac','-shortest',str(video)],check=True)
+            source=probe(video)
+            manifest={'source':source,'rallies':[],'config':read_json(APP/'defaults.json')}
+            timeline={'events':[timeline_event(start=1.,end=3.,clip_start_sec=0.,clip_end_sec=4.)]}
+            args=argument_parser().parse_args(['--video',str(video),'--model','fake-av',
+                '--collection','bloopers','--style','classic','--quality','720p','--no-sound-model'])
+
+            def render_fixture(directory,*unused,**kwargs):
+                directory=Path(directory);output=directory/'top1.mp4'
+                subprocess.run(['ffmpeg','-y','-v','error','-i',str(video),'-filter_complex',
+                    '[0:v]scale=720:405,pad=720:1280:0:875:black[v]','-map','[v]','-map','0:a:0',
+                    '-c:v','libx264','-threads','1','-r','30','-c:a','aac','-t','4',str(output)],check=True)
+                clip={'rank':1,'rally_id':'event_00001','path':str(output),'source_start_sec':0.,
+                    'source_end_sec':4.,'duration_sec':4.,'output_frames':120}
+                save_json(directory/'render_report.json',{'output':str(output),'order':'countdown',
+                    'clips':[clip],'expected_duration_sec':4.})
+
+            with patch('volleymole.media_worker.render',side_effect=render_fixture):
+                reports=complete_collections(args,manifest,timeline,root/'run')
+            target=root/'run/collections/bloopers'
+            self.assertEqual(reports[0]['actual_count'],1)
+            self.assertEqual(read_json(target/'verification.json')['status'],'passed')
+            self.assertEqual(read_json(target/'alignment_verification.json')['status'],'passed')
+            command=json.loads((target/'alignment.log').read_text().splitlines()[0])
+            self.assertEqual(command[0],sys.executable)
+
     def test_single_analysis_serves_both_collections_and_reuses_cache(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);video=root/'source.mp4'
@@ -22,7 +55,7 @@ class PipelineTests(unittest.TestCase):
                 '-f','lavfi','-i','sine=frequency=440:duration=8','-c:v','libx264','-threads','1','-c:a','aac','-shortest',str(video)],check=True)
             source=probe(video);source['identity']=identity(video)
             args=argument_parser().parse_args(['--video',str(video),'--analysis-cache-dir',str(root/'cache'),
-                '--model','fake-av','--collection','both','--stop-after','rank','--analysis-timeout','30'])
+                '--model','fake-av','--collection','both','--stop-after','rank','--analysis-timeout','30','--no-sound-model'])
             manifest={'source':source,'rallies':[],'config':read_json(APP/'defaults.json')}
             calls=[]
             def request(endpoint,key,payload,timeout):
@@ -74,7 +107,7 @@ class PipelineTests(unittest.TestCase):
                      patch('volleymole.run_match.inference_signature',return_value={'fixture':True}), \
                      patch('volleymole.run_match.ingest_shared',side_effect=ingest), \
                      patch('volleymole.run_match.build_manifest',side_effect=build):
-                    main(['--video',str(video),'--output',str(root/'cli'),'--collection','both','--model','fake-av',
+                    main(['--video',str(video),'--output',str(root/'cli'),'--collection','both','--model','fake-av','--no-sound-model',
                           '--llm-config',str(root/'absent-config.json'),'--analysis-cache-dir',str(root/'cache'),
                           '--analysis-timeout','30','--stop-after','rank'])
                 report=read_json(root/'cli/collections_report.json')

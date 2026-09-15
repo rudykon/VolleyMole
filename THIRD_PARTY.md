@@ -11,10 +11,12 @@ training pipeline, model weight or match video is included in the package.
 | `state_model.py` | `masouduut94/volleyball-ml-models`, `2374bfd859d6a03c78780d0aa1bae3d3a30dea83`, `models/GameStatusClassifierModule.py` | MIT, Copyright 2025 Masoud Masoumi Moghadam | Retains BGR/RGB preprocessing, uniform 16-frame sampling and classification. Includes local strict-checkpoint loading fix; removes logger/settings/UI dependencies; CPU uses FP32; errors propagate; probabilities retained. |
 | `vball_primitives.py`, sequence handling in `tracker.py` | `asigatchov/fast-volleyball-tracking-inference`, `637c217b6589be50eba77687d3f5fa5ca103c175`, `src/inference_onnx_seq_gray_v2.py` | MIT, Copyright 2025 Alexander Sigatchov | Retains grayscale seq9 heatmap centroid and radius filtering. Includes local corrected short-tail alignment; removes independent reader/UI/pandas writes/relative CUDA paths; adds explicit device proof and confidence. |
 | `camera.py` | same tracking repository, `src/make_reels.py` | same MIT | Only deployed moving-average and clamped crop paths retained; rendering/timestamps/audio remain VolleyMole code. |
+| `panns.py` | [Qiuqiang Kong's PANNs](https://github.com/qiuqiangkong/audioset_tagging_cnn), `Cnn14_DecisionLevelMax`; reference source SHA-256 pinned in `scripts/verify_sound_model_reference.py` | MIT | Inference-only TorchScript architecture, checkpoint-owned STFT/mel coefficients, explicit short-input padding and time cropping; no separate torchlibrosa runtime dependency. |
 
 Full copyright/permission notices are included in the installed package:
 [`volleyball-ml-models-MIT.txt`](src/volleymole/licenses/volleyball-ml-models-MIT.txt),
-[`tracking-MIT.txt`](src/volleymole/licenses/tracking-MIT.txt).
+[`tracking-MIT.txt`](src/volleymole/licenses/tracking-MIT.txt),
+[`PANNs-MIT.txt`](src/volleymole/licenses/PANNs-MIT.txt).
 The local source files differed from the pinned upstream commits. Their exact
 SHA-256 before integration:
 
@@ -76,6 +78,30 @@ VballNet is acquired from the pinned tracking repository, person pose weights
 from an Ultralytics release, and OCR weights from EasyOCR releases. No weight is
 included in Git or a wheel. Availability and hash verification are tested
 separately from licensing conclusions.
+
+The optional PANNs SED checkpoint is published under CC BY 4.0 in the
+[author's Zenodo record](https://zenodo.org/records/3987831). Its official MD5
+and pinned SHA-256 are checked before export. Retrieval mirrors, exact model
+and label hashes, attribution and numerical parity results are recorded in
+the ignored `models/audio/panns_cnn14_sed.manifest.json` store.
+
+The optional local action spotter uses the official torchvision ImageNet
+[ResNet18 checkpoint](https://download.pytorch.org/models/resnet18-f37072fd.pth),
+SHA-256 `f37072fd47e89c5e827621c5baffa7500819f7896bbacec160b1a16c560e07ec`.
+The frozen encoder is called through the installed torchvision package; the
+temporal GRU adapter is independently implemented and trained using original
+VNL-STES train/validation annotations. Neither this backbone nor the resulting
+local checkpoint is included in Git or wheels. No STES author's trained
+volleyball checkpoint is claimed or redistributed. Model and data provenance
+are documented in [the local action experiment](docs/本地排球动作定位.md);
+the project's source license does not relicense ImageNet or match footage.
+
+Public benchmark audio, video frames and annotations remain in ignored
+`data/public_benchmarks/` with original notices and provenance manifests.
+ESC-50, FSD50K, VNL-STES and SVHighlights have separate dataset or clip terms;
+neither downloading original labels nor reconstructing silent videos changes
+those terms. Sources and evaluation scope are documented in
+[the public-data evaluation record](docs/公开数据验收记录.md).
 
 Artwork retains the existing asset README and generation prompts. The user's
 `volleymole.svg` is included unchanged with its derived PNG; no rights in that

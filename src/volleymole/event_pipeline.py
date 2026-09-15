@@ -2,6 +2,7 @@
 import copy
 import json
 import os
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -14,10 +15,14 @@ def settings_from(args):
     return {'endpoint': args.api_base, 'model': args.vision_model or args.model,
         'key': os.getenv('VOLLEYMOLE_API_KEY') or os.getenv('OPENAI_API_KEY'),
         'timeout': args.api_timeout, 'retries': args.semantic_retries,
+        'max_tokens':getattr(args,'semantic_max_tokens',4096),
+        'frame_width':getattr(args,'semantic_frame_width',None),
         'concurrency': args.semantic_concurrency, 'coarse_fps': args.coarse_fps,
         'review_fps': args.review_fps, 'modality': args.semantic_modality,
         'chunk_sec': args.event_chunk_sec, 'overlap_sec': args.event_overlap_sec,
         'audio_model': digest(args.sound_model) if args.sound_model else None,
+        'audio_device': getattr(args,'sound_device','cpu'),
+        'audio_thresholds': digest(args.sound_thresholds) if getattr(args,'sound_thresholds',None) else None,
         'audio_labels': digest(args.sound_labels) if args.sound_labels else None}
 
 
@@ -25,6 +30,9 @@ class Discovery:
     def __init__(self, source, directory, args, deadline=None, frame_cache=None):
         self.source, self.directory, self.args = source, Path(directory), args
         self.settings = settings_from(args)
+        from .action_evidence import load_action_evidence
+        self.action_evidence,action_signature=load_action_evidence(args,source)
+        self.settings['action_evidence_sha256']=action_signature
         if frame_cache: self.settings['frame_cache'] = str(frame_cache)
         self.started = time.monotonic()
         self.deadline = deadline if deadline is not None else self.started+args.analysis_timeout
@@ -42,7 +50,7 @@ class Discovery:
         self.pool.shutdown(wait=True, cancel_futures=True)
 
     def discover(self):
-        from .audio_events import cached_audio, LocalSoundDetector
+        from .audio_events import cached_audio, LocalSoundDetector, load_sound_thresholds
         if self.args.ranker == 'rules' or not self.settings['key'] or not self.settings['model']:
             return {'results': [], 'failures': [], 'audio': None,
                 'audio_features': {'status': 'unknown', 'windows': []}, 'status': 'semantic_not_configured'}
@@ -53,6 +61,7 @@ class Discovery:
             audio = None; features = {'status': 'unknown', 'windows': []}
             failures.append({'job': 'audio', 'error': type(exc).__name__})
         features['sound_events'] = []
+        features['action_model']=self.action_evidence
         detector = None
         features['sound_detector_status'] = 'configured' if self.args.sound_model else 'unknown_not_configured'
         jobs = [{'id': f'coarse_{i:05d}', 'start': a, 'end': b, 'phase': 'coarse'}
@@ -70,12 +79,17 @@ class Discovery:
                     import hashlib
                     key = hashlib.sha256(json.dumps({'source':self.source['identity'],'job':job,
                         'model':self.settings['audio_model'],'labels':self.settings['audio_labels'],
+                        'device':self.settings['audio_device'],
+                        'thresholds':self.settings['audio_thresholds'],
                         'code':digest(APP/'audio_events.py')},sort_keys=True).encode()).hexdigest()
                     sound_path = self.cache/'sounds'/f'{key}.json'
                     if sound_path.is_file() and not self.args.no_analysis_cache:
                         local['sound_events'] = read_json(sound_path)
                     else:
-                        if detector is None: detector = LocalSoundDetector(self.args.sound_model, read_json(self.args.sound_labels))
+                        if detector is None: detector = LocalSoundDetector(self.args.sound_model, read_json(self.args.sound_labels),
+                            device=getattr(self.args,'sound_device','cpu'),
+                            thresholds=load_sound_thresholds(self.args.sound_thresholds,self.args.sound_model,self.args.sound_labels)
+                            if getattr(self.args,'sound_thresholds',None) else None)
                         local['sound_events'] = detector.detect(audio[round(job['start']*32000):round(job['end']*32000)], job['start'])
                         save_json(sound_path, local['sound_events'])
             return understand_context(job, self.source, self.cache, self.settings, audio, local, self.deadline)
@@ -112,13 +126,20 @@ class Discovery:
             jobs.append({'id': rally['rally_id'], 'start': max(0, rally['safe_start_sec']-2),
                 'end': min(self.source['duration_sec'], rally['safe_end_sec']+3), 'phase': 'review',
                 'candidate': {k: rally.get(k) for k in ('start_sec', 'end_sec', 'actions', 'action_events')}})
+        from .action_evidence import uncovered_action_contexts,evidence_status
+        oversized = [{'job': j['id'], 'status': 'unreviewed', 'error': 'context_exceeds_max_review_sec'}
+                     for j in jobs if j['end']-j['start'] > self.args.max_review_sec]
+        jobs = [j for j in jobs if j['end']-j['start'] <= self.args.max_review_sec]
+        # Rejected long contexts cannot count as visual coverage of a local
+        # proposal; retain a bounded process review around that proposal.
+        local_jobs=uncovered_action_contexts(self.action_evidence,jobs,self.source['duration_sec'])
+        oversized.extend({'job':j['id'],'status':'unreviewed','error':'context_exceeds_max_review_sec'}
+                         for j in local_jobs if j['end']-j['start']>self.args.max_review_sec)
+        jobs.extend(j for j in local_jobs if j['end']-j['start']<=self.args.max_review_sec)
         # Review likely selections first; every candidate may get one review,
         # never an agent loop or another final ranking API request.
         potential = {e['event_id']: max((e['dimensions'][k]['value'] or 0) for k in e['dimensions']) for e in events}
         jobs.sort(key=lambda j: (-potential.get(j['id'], 0), j['start']))
-        oversized = [{'job': j['id'], 'status': 'unreviewed', 'error': 'context_exceeds_max_review_sec'}
-                     for j in jobs if j['end']-j['start'] > self.args.max_review_sec]
-        jobs = [j for j in jobs if j['end']-j['start'] <= self.args.max_review_sec]
         records = None
         analytics = self.directory/'analytics/detections.jsonl'
         if analytics.is_file() and discovered['status'] != 'semantic_not_configured' and time.monotonic() < self.deadline:
@@ -153,6 +174,9 @@ class Discovery:
         failures += [{'job': j['id'], 'status': 'unreviewed', 'error': 'deadline_or_disabled'} for j in jobs
                      if j['id'] not in reviewed_ids|failed_ids]
         report = {'schema_version': 1, 'source': self.source, 'events': timeline,
+            'local_action_status':self.action_evidence['status'],
+            'local_action_coverage':evidence_status(self.action_evidence),
+            'local_action_candidates':len(self.action_evidence.get('events',[])),
             'coarse_status': discovered['status'], 'coarse_chunks': discovered.get('total_chunks', 0),
             'coarse_completed': len(discovered['results']), 'review_completed': len(results),
             'failures': discovered['failures']+failures+oversized,
@@ -260,7 +284,7 @@ def complete_collections(args, manifest, timeline, directory):
                 signature['assets'] = [identity(p) for p in asset_paths(args.art_theme,args.title_template,args.transition_style,args.design_suite)]
             report['output'] = stages.execute('render', signature, make_video)
             stages.execute('verify', {**signature, 'output': digest(report['output'])},
-                lambda: verify(target, len(decision['selected']), args.style))
+                lambda: verify(target, len(decision['selected']), args.style, sys.executable))
             report['stages'] = stages.current_run
         reports.append(report)
         print(f'{collection}：入选 {decision["actual_count"]}/{decision["requested_count"]}；{report["output"] or target}', flush=True)

@@ -19,6 +19,6 @@
   "event_score_threshold": 55,
   "event_weights": {
     "highlights": {"action_value": 0.35, "attack_defense": 0.25, "difficulty_change": 0.20, "motion_intensity": 0.10, "related_reaction": 0.10},
-    "bloopers": {"unexpected_contrast": 0.35, "related_laughter": 0.25, "narrative": 0.25, "player_reaction": 0.15}
+    "bloopers": {"unexpected_contrast": 0.25, "related_laughter": 0.40, "narrative": 0.20, "player_reaction": 0.15}
   }
 }

@@ -295,7 +295,7 @@ def _understand_context(job, source, cache, settings, audio, audio_features, dea
     prompt = (APP/'prompts/understand_events.md').read_text(encoding='utf-8')
     signature_data = {'version': 1, 'source': source['identity'], 'job': job,
         'settings': {k: v for k, v in settings.items() if k not in ('key','frame_cache')}, 'prompt': prompt,
-        'implementation': [digest(APP/name) for name in ('semantic.py', 'events.py', 'audio_events.py', 'motion_features.py', 'event_frames.py')],
+        'implementation': [digest(APP/name) for name in ('semantic.py', 'events.py', 'audio_events.py', 'motion_features.py', 'event_frames.py','action_evidence.py')],
         'local_signature': settings.get('local_signature') if records is not None else None}
     signature = hashlib.sha256(json.dumps(signature_data, sort_keys=True).encode()).hexdigest()
     path = Path(cache)/f'{signature}.json'
@@ -307,10 +307,17 @@ def _understand_context(job, source, cache, settings, audio, audio_features, dea
                 return {**saved, 'cached': True}
         except (ValueError, KeyError, TypeError): pass
     fps = settings['coarse_fps'] if job['phase'] == 'coarse' else settings['review_fps']
+    width = 512 if job['phase'] == 'coarse' else 768
+    if settings.get('frame_width') is not None:
+        width = min(width, settings['frame_width'])
     evidence, content, frames = sampled_evidence(source, job['start'], job['end'], fps,
-        512 if job['phase'] == 'coarse' else 768,
+        width,
         audio if settings['modality'] == 'frames-audio' else None, deadline, settings.get('frame_cache'))
     local = {'audio_status': audio_features['status'], 'sound_events': [], 'audio_windows': [], 'motion': []}
+    from .action_evidence import context_hypotheses,evidence_status
+    local['action_hypotheses']=context_hypotheses(audio_features.get('action_model',{}),job['start'],job['end'])
+    local['action_model_status']=audio_features.get('action_model',{}).get('status','not_configured')
+    local['action_model_coverage']=evidence_status(audio_features.get('action_model',{}))
     for i, event in enumerate(audio_features.get('sound_events', [])):
         if job['start'] <= event['start_sec'] < event['end_sec'] <= job['end']:
             ref = f'sound_{i}'
@@ -346,7 +353,7 @@ def _understand_context(job, source, cache, settings, audio, audio_features, dea
     content.insert(0, {'type': 'text', 'text': json.dumps({'phase': job['phase'], 'context': [job['start'], job['end']],
         'requested_fps': fps, 'actual_sample_times': [t for t, _ in frames], 'local': local,
         'candidate': job.get('candidate'), 'evidence': evidence}, ensure_ascii=False)})
-    payload = {'model': settings['model'], 'max_tokens': 8192,
+    payload = {'model': settings['model'], 'max_tokens': settings.get('max_tokens',4096),
         'messages': [{'role': 'system', 'content': prompt}, {'role': 'user', 'content': content}],
         'response_format': {'type': 'json_object'}}
     began = time.monotonic()

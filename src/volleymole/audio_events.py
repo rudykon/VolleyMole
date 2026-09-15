@@ -63,6 +63,32 @@ def measure_audio(samples, sample_rate=32000, step=.25):
             'laughter': None, 'touch': None} for i, d in enumerate(db)]}
 
 
+def validate_sound_thresholds(thresholds, labels):
+    """Validate detection cutoffs; these do not calibrate probabilities."""
+    if not isinstance(thresholds, dict) or not thresholds:
+        raise ValueError('声音阈值必须为非空的类别到数值映射')
+    if any(label not in labels for label in thresholds):
+        raise ValueError('声音阈值包含模型类别中不存在的名称')
+    if any(isinstance(value, bool) or not isinstance(value, (int, float))
+           or not np.isfinite(value) or not 0 <= value <= 1 for value in thresholds.values()):
+        raise ValueError('声音阈值必须为 [0, 1] 范围内的有限数值')
+    return {label: float(value) for label, value in thresholds.items()}
+
+
+def load_sound_thresholds(path, model, labels_path):
+    """Read a sidecar only when it is bound to these exact model/label bytes."""
+    from .common import digest, read_json
+    data = read_json(path)
+    if not isinstance(data, dict) or type(data.get('schema_version')) is not int or data['schema_version'] != 1:
+        raise ValueError('声音阈值文件 schema_version 必须为 1')
+    if data.get('model_sha256') != digest(model) or data.get('labels_sha256') != digest(labels_path):
+        raise ValueError('声音阈值文件与当前模型或类别文件的 SHA256 不匹配')
+    labels = read_json(labels_path)
+    if not isinstance(labels, list) or not labels or any(not isinstance(label, str) for label in labels):
+        raise ValueError('声音类别文件必须为非空字符串数组')
+    return validate_sound_thresholds(data.get('thresholds'), labels)
+
+
 class LocalSoundDetector:
     """TorchScript SED adapter, e.g. an exported PANNs framewise model.
 
@@ -70,31 +96,60 @@ class LocalSoundDetector:
     and return {'framewise_output': [1, time, classes]} probabilities. Labels
     come from the export's sidecar JSON in the exact training class order.
     Clipwise classifiers are deliberately rejected: they cannot locate events.
-    No weights are downloaded, and no generic sound label is called a ball hit.
+    Installation is explicit (scripts/install_sound_model.py); inference never
+    downloads files, and no generic sound label is called a ball hit.
     """
-    def __init__(self, model, labels):
+    def __init__(self, model, labels, device='cpu', thresholds=None):
         import torch
         if not isinstance(labels, list) or not labels or any(not isinstance(s, str) or not s for s in labels) or len(set(labels)) != len(labels):
             raise ValueError('声音模型类别必须为非空且不重复的字符串数组')
         self.torch = torch
         self.labels = labels
-        self.model = torch.jit.load(str(Path(model)), map_location='cpu').eval()
+        self.thresholds = validate_sound_thresholds(thresholds, labels) if thresholds is not None else {}
+        self.device = torch.device(device)
+        self.model = torch.jit.load(str(Path(model)), map_location=self.device).eval()
 
-    def detect(self, samples, start_sec=0., threshold=.5):
+    def framewise(self, samples):
+        """Return measured probabilities [time, class], including low scores.
+
+        This interface also supports evaluation against existing dataset labels
+        without turning predictions into new ground-truth annotations.
+        """
+        samples = np.asarray(samples, dtype=np.float32)
+        if samples.ndim != 1 or not len(samples) or not np.isfinite(samples).all():
+            raise ValueError('声音模型输入必须为非空、有限值的单声道波形')
         with self.torch.inference_mode():
-            output = self.model(self.torch.from_numpy(samples.copy())[None])
+            output = self.model(self.torch.from_numpy(samples.copy())[None].to(self.device))
+        if not isinstance(output, dict) or 'framewise_output' not in output:
+            raise ValueError('声音事件模型必须返回 framewise_output，不能使用整段分类输出代替')
         values = output['framewise_output'].detach().cpu().numpy()
         if (values.ndim != 3 or values.shape[0] != 1 or values.shape[1] == 0 or values.shape[2] != len(self.labels)
                 or not np.isfinite(values).all() or (values < 0).any() or (values > 1).any()):
             raise ValueError('声音事件模型输出不符合 framewise 概率协议')
-        step = len(samples)/32000/values.shape[1]
+        return values[0]
+
+    def detect(self, samples, start_sec=0., threshold=.5):
+        if not np.isfinite(start_sec) or start_sec < 0 or not np.isfinite(threshold) or not 0 <= threshold <= 1:
+            raise ValueError('声音事件起点和概率阈值无效')
+        values = self.framewise(samples)
+        duration = len(samples)/32000
+        # PANNs exports declare their 10 ms output grid. Its independent CNN
+        # decisions are only 320 ms apart: interpolation adds no new evidence.
+        hop = getattr(self.model, 'frame_hop_samples', None)
+        step = hop/32000 if hop is not None else duration/values.shape[0]
         events = []
         for cls, label in enumerate(self.labels):
-            hits = np.flatnonzero(values[0, :, cls] >= threshold)
+            # The scalar remains the fallback for uncalibrated classes.
+            # Returned probability is the original network output, unchanged.
+            hits = np.flatnonzero(values[:, cls] >= self.thresholds.get(label, threshold))
             groups = np.split(hits, np.flatnonzero(np.diff(hits) > 1)+1)
             for group in groups:
                 if len(group):
-                    events.append({'label': label, 'start_sec': start_sec+int(group[0])*step,
-                        'end_sec': start_sec+(int(group[-1])+1)*step,
-                        'probability': float(values[0, group, cls].max()), 'association': 'unknown'})
+                    start = min(duration, int(group[0])*step)
+                    end = min(duration, (int(group[-1])+1)*step)
+                    if end <= start:
+                        continue
+                    events.append({'label': label, 'start_sec': start_sec+start,
+                        'end_sec': start_sec+end,
+                        'probability': float(values[group, cls].max()), 'association': 'unknown'})
         return events

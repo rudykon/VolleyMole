@@ -22,7 +22,9 @@ python3 scripts/check_release.py
 git diff --check
 ```
 
-自动测试不需要下载模型、GPU 或真实 API。真实推理和性能脚本需要本地模型与素材，运行方法见 [脚本说明](scripts/README.md)。修改推理时，应核对帧覆盖、PTS、模型窗口、原始证据与回合边界；修改呈现时，应核对成片帧数、音画同步与标题检查。
+自动测试不需要下载模型、GPU 或真实 API。完整本地测试还会检查不发布到 Git 的生成式设计素材；GitHub Actions 中的 [Engineering checks](.github/workflows/engineering-checks.yml) 只运行可发布的核心与双榜回归，并用 4 秒合成音视频确认新榜单入口会生成原画面／原声对齐报告。该 Actions 结果不代表真实模型精度、GPU 兼容性、外部 API 能力或真实比赛成片已验收。
+
+真实推理和性能脚本需要本地模型与素材，运行方法见 [脚本说明](scripts/README.md)。修改推理时，应核对帧覆盖、PTS、模型窗口、原始证据与回合边界；修改呈现时，应核对成片解码、帧数、音视频起点／时长、原片画面／原声内容对齐与标题检查。
 
 ## 提交内容
 

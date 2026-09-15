@@ -74,6 +74,10 @@ def argument_parser():
     parser.add_argument('--top-k',type=int,choices=(5,10),default=5)
     parser.add_argument('--collection',choices=('highlights','bloopers','both'),default='highlights')
     parser.add_argument('--semantic-concurrency',type=int,choices=range(1,17),default=6)
+    parser.add_argument('--semantic-max-tokens',type=int,default=4096,
+                        help='单次事件理解的最大生成token数（256–16384）；须给视频输入预留上下文空间')
+    parser.add_argument('--semantic-frame-width',type=int,
+                        help='视频证据帧的最大宽度（64–4096）；不指定则保留粗读512/复核768，不改变FPS或上下文时长')
     parser.add_argument('--analysis-timeout',type=float,default=1800,help='事件发现与复核共用墙钟预算（秒），从本地推理前启动计时')
     parser.add_argument('--semantic-retries',type=int,choices=range(3),default=1)
     parser.add_argument('--event-chunk-sec',type=float,default=24)
@@ -85,6 +89,13 @@ def argument_parser():
                         help='显式采样的视频帧序列＋同步 WAV；frames 用于不支持音频的服务并记录声音未知')
     parser.add_argument('--sound-model',type=Path,help='本地 TorchScript framewise 声音事件模型（32 kHz）')
     parser.add_argument('--sound-labels',type=Path,help='声音模型类别顺序 JSON 数组')
+    parser.add_argument('--sound-thresholds',type=Path,help='与模型及类别哈希绑定的声音发现阈值 JSON')
+    parser.add_argument('--no-sound-model',action='store_true',help='关闭已安装的本地声音事件模型')
+    parser.add_argument('--sound-device',default='cpu',choices=('cpu','cuda:0','cuda:1','cuda:2','cuda:3'),
+                        help='声音模型设备；默认 CPU，避免挤占现有共享视觉推理设备')
+    action_group=parser.add_mutually_exclusive_group()
+    action_group.add_argument('--action-evidence',type=Path,help='导入与本视频 SHA256 绑定的本地动作候选 JSON；仅作待核实定位假设')
+    action_group.add_argument('--action-evidence-dir',type=Path,help='按源视频 SHA256.json 查找动作候选缓存，支持多局共享')
     parser.add_argument('--event-frame-cache',type=Path,help=argparse.SUPPRESS)
     parser.add_argument('--focus-player',type=int)
     parser.add_argument('--format',choices=['vertical'],default='vertical')
@@ -128,12 +139,36 @@ def argument_parser():
 
 def validate_event_arguments(args, parser):
     import math
+    if not 256<=getattr(args,'semantic_max_tokens',4096)<=16384:
+        parser.error('semantic_max_tokens 必须在 256–16384 之间')
+    frame_width=getattr(args,'semantic_frame_width',None)
+    if frame_width is not None and not 64<=frame_width<=4096:
+        parser.error('semantic_frame_width 必须在 64–4096 之间')
     for key in ('analysis_timeout','api_timeout','event_chunk_sec','coarse_fps','review_fps','max_review_sec'):
         if not math.isfinite(getattr(args,key)) or getattr(args,key)<=0: parser.error(f'{key} 必须是正有限数')
     if not 0<=args.event_overlap_sec<args.event_chunk_sec: parser.error('事件重叠必须小于块长且非负')
     if args.review_fps<args.coarse_fps: parser.error('复核采样率不能低于粗读')
+    if args.no_sound_model and (args.sound_model or args.sound_labels or args.sound_thresholds):
+        parser.error('--no-sound-model 不能与显式声音模型同时使用')
     if bool(args.sound_model)!=bool(args.sound_labels): parser.error('声音模型与类别文件须一起指定')
+    if not args.no_sound_model and not args.sound_model and args.ranker!='rules':
+        model_root=Path(args.models or os.environ.get('VOLLEYMOLE_MODELS',ROOT/'models'))
+        model=model_root/'audio/panns_cnn14_sed.pt'
+        labels=model_root/'audio/panns_cnn14_sed.labels.json'
+        if model.is_file() and labels.is_file():
+            args.sound_model,args.sound_labels=model,labels
     if args.sound_model and (not args.sound_model.is_file() or not args.sound_labels.is_file()): parser.error('声音模型或类别文件不存在')
+    if args.sound_thresholds and not args.sound_model:
+        parser.error('--sound-thresholds 需要已配置的声音模型与类别文件')
+    if args.sound_model and not args.sound_thresholds:
+        thresholds=args.sound_model.with_suffix('.thresholds.json')
+        if thresholds.is_file(): args.sound_thresholds=thresholds
+    if args.sound_thresholds:
+        from .audio_events import load_sound_thresholds
+        try: load_sound_thresholds(args.sound_thresholds,args.sound_model,args.sound_labels)
+        except (OSError,ValueError) as exc: parser.error(str(exc))
+    if args.action_evidence and not args.action_evidence.is_file():parser.error('动作候选文件不存在')
+    if args.action_evidence_dir and not args.action_evidence_dir.is_dir():parser.error('动作候选缓存目录不存在')
     if args.ranker=='rules' and args.collection!='highlights': parser.error('趣味集锦需要事件理解，请使用 --ranker auto')
 
 
@@ -244,6 +279,12 @@ def main(argv=None):
     tracking_cache=args.tracking_cache or cached.get('tracking')
     save_json(directory/'run_config.json',{'video':str(video),'top_k':args.top_k,'focus_player':args.focus_player,
               'quality':args.quality,'collection':args.collection,
+              'semantic_max_tokens':args.semantic_max_tokens,'semantic_frame_width':args.semantic_frame_width,
+              'sound_model':str(args.sound_model) if args.sound_model else None,
+              'sound_labels':str(args.sound_labels) if args.sound_labels else None,'sound_device':args.sound_device,
+              'sound_thresholds':str(args.sound_thresholds) if args.sound_thresholds else None,
+              'action_evidence':str(args.action_evidence) if args.action_evidence else None,
+              'action_evidence_dir':str(args.action_evidence_dir) if args.action_evidence_dir else None,
               'analytics_cache':str(analytics_cache) if analytics_cache else None,'tracking_cache':str(tracking_cache) if tracking_cache else None,
               'device':args.device,'devices':args.devices,'config':config,'code':code,'inference_mode':args.inference_mode,
               'models':str(registry.directory),'analysis_cache_dir':str(args.analysis_cache_dir),

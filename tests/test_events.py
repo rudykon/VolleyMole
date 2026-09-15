@@ -85,7 +85,24 @@ class EventTests(unittest.TestCase):
         self.assertIn('motion_intensity',before['unknown_dimensions'])
         e['dimensions']['related_laughter']['value']=4
         self.assertEqual(score_event(e,'highlights'),before)
-        self.assertEqual(score_event(e,'bloopers')['score'],81.25)
+        self.assertEqual(score_event(e,'bloopers')['score'],85.)
+
+    def test_linked_laughter_can_qualify_an_ordinary_serve_error(self):
+        e=timeline_event(event_type='serve_error',laughter_linked=True)
+        e['dimensions']['unexpected_contrast']['value']=1
+        e['dimensions']['related_laughter']['value']=3
+        self.assertEqual(len(select_events([e],'bloopers',5)),1)
+        e['laughter_linked']=False
+        self.assertEqual(select_events([e],'bloopers',5),[])
+        e['laughter_linked']=None
+        self.assertEqual(select_events([e],'bloopers',5),[])
+        e['laughter_linked']=True;e['injury_suspected']=True
+        self.assertEqual(select_events([e],'bloopers',5),[])
+
+    def test_default_weights_match_code_and_quiet_contrast_stays_eligible(self):
+        from volleymole.events import WEIGHTS
+        self.assertEqual(read_json(APP/'defaults.json')['event_weights'],WEIGHTS)
+        self.assertEqual(len(select_events([timeline_event()],'bloopers',5)),1)
 
     def test_short_excellent_beats_long_ordinary_without_time_penalty(self):
         short=timeline_event(start=2,end=4)

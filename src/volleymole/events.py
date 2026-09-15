@@ -5,8 +5,8 @@ import math
 WEIGHTS = {
     'highlights': {'action_value': .35, 'attack_defense': .25, 'difficulty_change': .20,
                    'motion_intensity': .10, 'related_reaction': .10},
-    'bloopers': {'unexpected_contrast': .35, 'related_laughter': .25,
-                 'narrative': .25, 'player_reaction': .15},
+    'bloopers': {'unexpected_contrast': .25, 'related_laughter': .40,
+                 'narrative': .20, 'player_reaction': .15},
 }
 DIMENSIONS = tuple(k for group in WEIGHTS.values() for k in group)
 
@@ -130,7 +130,13 @@ def select_events(events, collection, count, weights=None, threshold=55.):
         if collection == 'highlights' and event['is_rally'] is not True: continue
         if collection == 'bloopers':
             if event['injury_suspected'] is not False: continue
-            if any((event['dimensions'][k]['value'] or 0) < 2 for k in ('unexpected_contrast', 'narrative')): continue
+            if (event['dimensions']['narrative']['value'] or 0) < 2: continue
+            # An ordinary serve/attack error can be funny when the actual
+            # audience reaction is linked to it. A sound peak alone is not that
+            # link; preserve the visual-contrast path for quiet matches.
+            linked_laughter=(event.get('laughter_linked') is True and
+                             (event['dimensions']['related_laughter']['value'] or 0)>=2)
+            if not linked_laughter and (event['dimensions']['unexpected_contrast']['value'] or 0)<2: continue
         pool.append((event, result))
     pool.sort(key=lambda pair: (-pair[1]['score'], -pair[1]['observed_weight'], pair[0]['source_id'], pair[0]['start_sec']))
     selected = []

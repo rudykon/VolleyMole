@@ -4,10 +4,17 @@
   <h1>VolleyMole · 排球高光自动剪辑</h1>
   <p>把一整场日常排球比赛，剪成有回合、有排名、有原声的竖屏五佳球或十佳球。</p>
   <p>Python 3.12 · Linux x86-64 · 单卡 / 四卡 CUDA · H.264 + AAC</p>
+  <p><a href="https://github.com/rudykon/VolleyMole/actions/workflows/engineering-checks.yml"><img src="https://github.com/rudykon/VolleyMole/actions/workflows/engineering-checks.yml/badge.svg" alt="Engineering checks"></a></p>
   <p><a href="#快速开始">快速开始</a> · <a href="#五套插画风格">插画风格</a> · <a href="#四卡加速">四卡加速</a> · <a href="#文档与开发">文档</a> · <a href="#致谢与参考">致谢</a></p>
 </div>
 
 > 自动分析现已使用全场事件理解：`--collection highlights|bloopers|both`。双榜共享粗读、复核与缓存，支持不足数量输出。接口能力、本地声音模型协议和验收方式见 [事件理解与双榜](docs/事件理解与双榜.md)。
+
+声音模型可用 `.venv/bin/python scripts/install_sound_model.py` 安装作者发布的 PANNs 事件检测权重，安装后自动启用。无需自行标注数据。部署见[声音模型部署](docs/声音模型部署.md)，已有标签、实测结果与未验证项见[公开数据验收记录](docs/公开数据验收记录.md)。
+
+真实原标注数据上的动作定位改进、可选本地时序模型接入及当前效果边界见[动作准确性改进与五大囧基准](docs/动作准确性改进与五大囧基准.md)。[五大囧人工评分基准](docs/五大囧人工评分基准.md)已提供匿名离线评分页面与指标工具；目前没有新增真人评分。
+
+五大囧现优先参考与事件关联的笑声，普通发球/扣球失误也可因相关笑声入选。本地8处候选的原声片段、复核结果与限制见[8个声音候选复核](docs/8个声音候选复核.md)。
 
 ---
 
@@ -225,7 +232,7 @@ uv sync --locked
 
 ## 输出与可追溯性
 
-自动模式的共用事件保存在 `event_timeline.json`，两类成片分别位于 `collections/highlights/`、`collections/bloopers/`，实际数量和不足原因见 `collections_report.json`。下面为显式规则模式的原有目录：
+自动模式的共用事件保存在 `event_timeline.json`，两类成片分别位于 `collections/highlights/`、`collections/bloopers/`，实际数量和不足原因见 `collections_report.json`。每个非空榜单目录都保存 `verification[_lively].json`（完整解码、帧数、音视频起点与时长）和 `alignment_verification[_lively].json`（成片对原片的画面抽样比对与原声互相关）。下面为显式规则模式的原有目录：
 
 ```text
 runs/match-top5/
@@ -234,10 +241,11 @@ runs/match-top5/
 ├── edit_decision.json       # 入选回合、排名及剪辑区间
 ├── timing_latest.json       # 本次命令分阶段耗时
 ├── render_report_lively.json
-└── verification_lively.json # 成片解码与时间检查
+├── verification_lively.json # 解码、帧数与音视频时间检查
+└── alignment_verification_lively.json # 原片画面／原声内容对齐
 ```
 
-比赛状态、回合边界和球衣号码均为模型推断，不等于人工标注真值。远景、遮挡、多球热身会影响识别，规则排名也可能选入非正式对抗。建议在发布成片前人工复核；音画验证通过不代表语义识别完全正确。
+比赛状态、回合边界和球衣号码均为模型推断，不等于人工标注真值。远景、遮挡、多球热身会影响识别，规则排名也可能选入非正式对抗。建议在发布成片前人工复核；原片内容对齐通过只说明渲染没有换画面或错位原声，不代表语义识别完全正确。
 
 ## 文档与开发
 
