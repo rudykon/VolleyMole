@@ -40,4 +40,6 @@
 
 `fonts/ZCOOLKuaiLe-Regular.ttf` 是站酷快乐体，用于标题和转场大字。常规说明文字沿用运行参数中的正文字体。
 
+上述字体为运行环境的资源清单，不代表字体二进制已提交到 Git。所有文字绘制入口使用 `font_support.py` 检查字形；首选字体缺失、损坏或不能覆盖全文时尝试已部署的备用字体，不下载资源。英文趣味榜的中文事件标题因此可保留原文显示，旧版手写体也可回退显示重音字符与罕见汉字。没有任何可用字体覆盖全文时会明确失败，不输出缺字方框。完整规则和字体缓存说明见 [字体与分发](../../../docs/标题模板指南.md#字体与分发)。
+
 字体与许可证下载自 [Google Fonts 的 ZCOOL KuaiLe 目录](https://github.com/google/fonts/tree/main/ofl/zcoolkuaile)。版权为 The ZCOOL KuaiLe Project Authors；随字体保留原始 [SIL OFL 1.1 许可证](https://raw.githubusercontent.com/google/fonts/main/ofl/zcoolkuaile/OFL.txt)，本地文件为 `fonts/OFL-ZCOOLKuaiLe.txt`。

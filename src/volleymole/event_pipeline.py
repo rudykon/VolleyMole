@@ -349,6 +349,7 @@ def complete_collections(args, manifest, timeline, directory):
             'analysis_status': analysis['status']}
         if decision['selected'] and args.stop_after != 'rank':
             from .common import Stages, identity
+            from .font_support import font_fingerprint
             stages = Stages(target)
             if args.rerun_from in ('rank','render','verify'):
                 for name in (('verify',) if args.rerun_from=='verify' else ('render','verify')):
@@ -360,7 +361,7 @@ def complete_collections(args, manifest, timeline, directory):
                 rendered = read_json(target/f'render_report{suffix}.json')
                 return rendered['output'], [rendered['output'], target/f'render_report{suffix}.json']+[s['path'] for s in rendered.get('segments', rendered['clips'])]
             signature = {'decision': digest(target/'edit_decision.json'), 'manifest': digest(target/'match_manifest.json'),
-                'code': {p.name: digest(p) for p in APP.glob('*.py')}, 'font': identity(args.font),
+                'code': {p.name: digest(p) for p in APP.glob('*.py')}, 'fonts': font_fingerprint(args.font),
                 'render': [args.style, args.render_workers, args.art_theme, args.title_template, args.transition_style,
                     args.design_suite, args.design_language, args.quality]}
             if args.style=='lively':

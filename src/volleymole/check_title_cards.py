@@ -45,6 +45,8 @@ def check(directory):
     title_template=report.get('title_template','legacy')
     design_suite=report.get('design_suite','custom')
     decision=read_json(directory/'edit_decision.json')
+    from .font_support import validate_render_fonts
+    font_validation=validate_render_fonts(decision,report['font_path'],'lively',title_template)
     manifest=read_json(directory/'match_manifest.json')
     by_rank={item['rank']:item for item in decision['selected']}
     top_k=len(by_rank)
@@ -149,7 +151,7 @@ def check(directory):
             if max(errors.values())>12:raise ValueError(f'顶部不是对应的比赛源画面：{label}, {errors}')
             live_background_results.append({'rank':clip['rank'],'source_sec':sample['source_sec'],
                                             'transparent_region_mean_absolute_error':errors})
-    save_json(directory/'title_card_readability.json',{'status':'passed','art_theme':art_theme,'title_template':title_template,'design_suite':design_suite,
+    save_json(directory/'title_card_readability.json',{'status':'passed','font_validation':font_validation,'art_theme':art_theme,'title_template':title_template,'design_suite':design_suite,
         'method':'Compare cards, opaque title glyphs, rank templates, and transparent title regions against original source camera crops',
         'results':results,'header_results':header_results,'replay_overlay_checks':replay_overlay_checks,
         'live_background_results':live_background_results})

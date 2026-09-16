@@ -1,7 +1,7 @@
 """Ten bilingual, code-native title systems; source artwork remains untouched."""
 from dataclasses import dataclass
-from functools import lru_cache
 from .common import APP
+from .font_support import load_font, font_assets, normalize_text, text_units
 
 FONTS=APP/'assets/fonts'
 STYLES=('editorial','arena','cinema','pop','minimal')
@@ -30,8 +30,8 @@ def get_template(name='legacy'):
 
 def template_assets(name='legacy'):
     template=get_template(name)
-    if name=='legacy':return [APP/'title_templates.py']
-    return list(dict.fromkeys([APP/'title_templates.py',template.font,FONTS/'NotoSans-Bold.ttf',
+    if name=='legacy':return [APP/'title_templates.py',*font_assets(template.font)]
+    return list(dict.fromkeys([APP/'title_templates.py',*font_assets(template.font),
                               FONTS/'NOTICE-Noto-CJK.txt',FONTS/'NOTICE-Noto-Core.txt']))
 
 
@@ -66,26 +66,27 @@ def display_title(item,name):
     return result
 
 
-@lru_cache(maxsize=256)
-def _font(path,size):
-    from PIL import ImageFont
-    return ImageFont.truetype(str(path),size)
-
-
 def text_layer(text,size,fill,max_width,name,outline=None,tracking=0,font_path=None):
     """Measure actual glyph bounds, including stroke and spacing, before fitting."""
     from PIL import Image,ImageDraw
+    import math
     template=get_template(name)
     path=font_path or template.font
-    text=' '.join(str(text).split())
+    text=normalize_text(' '.join(str(text).split()))
     if not text:raise ValueError('标题文字不能为空')
     if max_width<24:raise ValueError('文字可用宽度过小')
     stroke=2 if outline is not None else 0
+    units=text_units(text)
     for fitted in range(size,3,-1):
-        font=_font(str(path),fitted)
+        font=load_font(text,path,fitted)
         if tracking:
-            length=sum(font.getlength(c) for c in text)+tracking*(len(text)-1)
-            bbox=(0,font.getbbox(text)[1],int(length)+2,font.getbbox(text)[3])
+            cursor=0.;boxes=[]
+            for char in units:
+                left,top,right,bottom=font.getbbox(char,stroke_width=stroke)
+                boxes.append((cursor+left,top,cursor+right,bottom))
+                cursor+=font.getlength(char)+tracking
+            bbox=(math.floor(min(b[0] for b in boxes)), min(b[1] for b in boxes),
+                  math.ceil(max(b[2] for b in boxes)), max(b[3] for b in boxes))
         else:bbox=font.getbbox(text,stroke_width=stroke)
         width=bbox[2]-bbox[0]+16
         if width<=max_width:break
@@ -94,7 +95,7 @@ def text_layer(text,size,fill,max_width,name,outline=None,tracking=0,font_path=N
     draw=ImageDraw.Draw(image)
     x,y=8-bbox[0],8-bbox[1]
     if tracking:
-        for char in text:
+        for char in units:
             draw.text((x,y),char,font=font,fill=fill,stroke_width=stroke,stroke_fill=outline)
             x+=font.getlength(char)+tracking
     else:draw.text((x,y),text,font=font,fill=fill,stroke_width=stroke,stroke_fill=outline)
@@ -107,13 +108,15 @@ def headline(title,name,ink,accent,paper,box=(608,260)):
     template=get_template(name)
     style,lang=template.style,template.language
     width,height=box
+    title=normalize_text(title)
     if not title.strip():raise ValueError('主标题不能为空')
     canvas=Image.new('RGBA',box)
     draw=ImageDraw.Draw(canvas)
     lines=title.splitlines()
     if len(lines)==1:
         text=lines[0]
-        if lang=='zh' and len(text)>8:lines=[text[:len(text)//2],text[len(text)//2:]]
+        units=text_units(text)
+        if lang=='zh' and len(units)>8:lines=[''.join(units[:len(units)//2]),''.join(units[len(units)//2:])]
         elif lang=='en' and len(text)>19 and ' ' in text:
             tokens=text.split();middle=max(1,len(tokens)//2)
             lines=[' '.join(tokens[:middle]),' '.join(tokens[middle:])]

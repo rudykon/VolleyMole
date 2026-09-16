@@ -9,7 +9,8 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timezone
-from .common import APP, ROOT, DEFAULT_FONT, Stages, digest, functions_digest, identity, probe, read_json, run, save_json
+from .common import APP, ROOT, Stages, digest, functions_digest, identity, probe, read_json, run, save_json
+from .font_support import DEFAULT_FONT, font_fingerprint
 from .adapters import ingest_analytics, ingest_tracking, ingest_player, ingest_shared, inference_signature
 from .models import ModelRegistry
 from .rally import build_manifest
@@ -28,6 +29,8 @@ def verify(directory, top_k, style='classic', alignment_python=None):
     manifest=read_json(directory/'match_manifest.json');decision=read_json(directory/'edit_decision.json')
     validate_decision(decision,manifest,directory,top_k)
     render=read_json(directory/f'render_report{suffix}.json')
+    from .font_support import validate_render_fonts
+    font_validation=validate_render_fonts(decision,render.get('font_path',DEFAULT_FONT),style,render.get('title_template','legacy'))
     if len(render['clips'])!=top_k or [c['rank'] for c in render['clips']]!=list(range(top_k,0,-1)):
         raise ValueError('成片回合数量或播放顺序错误')
     if style=='lively':
@@ -54,7 +57,7 @@ def verify(directory, top_k, style='classic', alignment_python=None):
         reports.append({'path':str(path),'sha256':digest(path),'duration_sec':float(video['duration']),
                         'av_duration_delta_sec':av_delta,'av_start_delta_sec':av_start_delta,
                         'duration_error_sec':duration_error,'full_decode':'passed','frames':int(video['nb_frames'])})
-    report={'status':'passed','top_k':top_k,'videos':reports,'source_has_audio':manifest['source']['has_audio'],
+    report={'status':'passed','top_k':top_k,'videos':reports,'font_validation':font_validation,'source_has_audio':manifest['source']['has_audio'],
             'ranking_mode':decision['ranking_mode'],'note':'完整解码与时间轴校验不等于语义识别准确率。'}
     artifacts=[directory/f'verification{suffix}.json']
     if alignment_python:
@@ -407,10 +410,11 @@ def main(argv=None):
                           'presentation':code['presentation.py'],'camera':code['camera.py'],'style':args.style,
                           'illustrated':code['illustrated.py'],
                           'assets':[identity(p) for p in asset_paths(args.art_theme,args.title_template,args.transition_style,args.design_suite)] if args.style=='lively' else [],
-                          'schema':code['schemas.py'],'font':identity(args.font)},make_video)
+                          'schema':code['schemas.py'],'fonts':font_fingerprint(args.font)},make_video)
     stages.execute(verify_stage,{'output':digest(output),'decision':digest(decision),'report':digest(directory/f'render_report{suffix}.json'),
                              'code':code['run_match.py'],'alignment':code['check_alignment.py'],
                              'sources_code':digest(APP/'sources.py'),
+                             'fonts':font_fingerprint(args.font),
                              'title_cards':digest(APP/'check_title_cards.py') if args.style=='lively' else None},
                    lambda:verify(directory,args.top_k,args.style,args.tracking_python))
     finish_timing(output)

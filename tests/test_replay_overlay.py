@@ -6,11 +6,12 @@ import tempfile
 import unittest
 
 from volleymole.illustrated import overlay,headers,composite_header
+from volleymole.font_support import DEFAULT_FONT
 
 
 @unittest.skipUnless(importlib.util.find_spec('PIL'),'Run with the tracking Python for Pillow image tests')
 class ReplayOverlayTests(unittest.TestCase):
-    font='/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc'
+    font=str(DEFAULT_FONT)
 
     def test_replay_caption_has_no_background_plate(self):
         from PIL import Image

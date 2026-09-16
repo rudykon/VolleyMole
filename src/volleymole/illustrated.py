@@ -4,6 +4,7 @@ import subprocess
 from .common import APP, ROOT, digest, read_json, save_json
 from .art_themes import get_theme
 from .title_templates import get_template, template_assets, words
+from .font_support import font_assets, load_font, normalize_text, text_units
 
 ART_ROOT=APP/'assets/illustrated'
 TITLE_FONT=APP/'assets/fonts/ZCOOLKuaiLe-Regular.ttf'
@@ -21,7 +22,7 @@ def asset_paths(art_theme='default',title_template='legacy',transition_style='fa
     from .transitions import transition_assets
     from .design_suites import suite_assets
     root=get_theme(art_theme).root
-    return [TITLE_FONT,LOGO_SOURCE,LOGO_PNG,APP/'rasterize_logo.py',APP/'art_themes.py']+[root/f'{name}.png' for name in ART_NAMES]+template_assets(title_template)+transition_assets(transition_style)+suite_assets(design_suite)
+    return [*font_assets(TITLE_FONT),LOGO_SOURCE,LOGO_PNG,APP/'rasterize_logo.py',APP/'art_themes.py']+[root/f'{name}.png' for name in ART_NAMES]+template_assets(title_template)+transition_assets(transition_style)+suite_assets(design_suite)
 
 
 def prepare_brand():
@@ -79,11 +80,13 @@ def chapter_label(rank,top_k,title_template='legacy'):
 
 
 def title_lines(title):
+    title=normalize_text(title)
     for mark in ('，','！'):
         if mark in title[:-1]:
             a,b=title.split(mark,1)
             return [a+('！' if mark=='！' else ''),b]
-    if len(title)>9:return [title[:len(title)//2],title[len(title)//2:]]
+    units=text_units(title)
+    if len(units)>9:return [''.join(units[:len(units)//2]),''.join(units[len(units)//2:])]
     return [title]
 
 
@@ -105,14 +108,18 @@ def sticker(path,box):
 
 
 def lettering(text,size,fill,max_width,tilt=0,outline=None,title_template='legacy'):
+    if not isinstance(text,str) or not text.strip():raise ValueError('标题文字不能为空')
+    text=normalize_text(text).replace('\n',' ')
     if title_template!='legacy':
         from .title_templates import text_layer
         return text_layer(text,size,fill,max_width,title_template,outline)
-    from PIL import Image,ImageDraw,ImageFont
-    if not TITLE_FONT.is_file():raise ValueError('缺失站酷快乐体标题字体')
-    font=ImageFont.truetype(str(TITLE_FONT),size)
-    while font.getlength(text)>max_width-16:
-        size-=1;font=ImageFont.truetype(str(TITLE_FONT),size)
+    from PIL import Image,ImageDraw
+    if size<4:raise ValueError('标题字号不能小于 4')
+    if max_width<=16:raise ValueError('文字可用宽度过小')
+    for fitted in range(size,3,-1):
+        font=load_font(text,TITLE_FONT,fitted)
+        if font.getlength(text)<=max_width-16:break
+    else:raise ValueError('标题过长，无法在安全区内排版')
     stroke=3 if outline is not None else 1
     bbox=font.getbbox(text,stroke_width=max(2,stroke))
     layer=Image.new('RGBA',(bbox[2]-bbox[0]+18,bbox[3]-bbox[1]+18))
@@ -128,19 +135,21 @@ def lettering(text,size,fill,max_width,tilt=0,outline=None,title_template='legac
 
 def headers(item,font_path,top_k,title,art_theme='default',title_template='legacy',design_suite='custom'):
     """Return BGRA title layers; empty pixels reveal the same live video frame."""
+    if not isinstance(title,str) or not title.strip():raise ValueError('标题文字不能为空')
     if design_suite!='custom':
         from .design_suites import suite_headers
         return suite_headers(item,top_k,title,design_suite,get_template(title_template).language)
     import cv2
     import numpy as np
-    from PIL import Image,ImageDraw,ImageFont
+    from PIL import Image,ImageDraw
     theme=get_theme(art_theme)
     INK,CREAM,COLORS=theme.ink,theme.cream,theme.colors
     color=COLORS[(item['rank']-1)%len(COLORS)]
     art=sticker(illustration_for(item,art_theme),(64,61))
     badge=rank_badge(item['rank'],top_k,290,art_theme,title_template,item.get('collection','highlights'))
     line=lettering(title.splitlines()[0],36,CREAM,412,tilt=1,outline=INK,title_template=title_template)
-    sub=ImageFont.truetype(str(font_path),18)
+    chapter=chapter_label(item['rank'],top_k,title_template)
+    sub=load_font(chapter,font_path,18)
     frames=[]
     for i in range(16):
         p=min(1.,i/12)
@@ -152,7 +161,7 @@ def headers(item,font_path,top_k,title,art_theme='default',title_template='legac
         canvas.alpha_composite(badge,(4,(110-badge.height)//2))
         canvas.alpha_composite(art,(644+round(65*(1-p)**3),49))
         canvas.alpha_composite(line,(298,3))
-        draw.text((310,73),chapter_label(item['rank'],top_k,title_template),font=sub,fill=color,
+        draw.text((310,73),chapter,font=sub,fill=color,
                   stroke_width=2,stroke_fill=INK)
         frames.append(cv2.cvtColor(np.asarray(canvas),cv2.COLOR_RGBA2BGRA))
     return frames
@@ -171,7 +180,7 @@ def overlay(path,kind,font_path,index=0,art_theme='default',title_template='lega
     if design_suite!='custom':
         from .design_suites import suite_overlay
         return suite_overlay(path,kind,index,design_suite,get_template(title_template).language)
-    from PIL import Image,ImageDraw,ImageFont
+    from PIL import Image,ImageDraw
     theme=get_theme(art_theme)
     ART_ROOT,INK,CREAM,COLORS=theme.root,theme.ink,theme.cream,theme.colors
     canvas=Image.new('RGBA',(720,1280))
@@ -186,7 +195,7 @@ def overlay(path,kind,font_path,index=0,art_theme='default',title_template='lega
         title='先看这几下！' if title_template=='legacy' else words(title_template,'teaser')
         subtitle='精彩抢先看  ·  好球马上来' if title_template=='legacy' else words(title_template,'teaser_sub')
         canvas.alpha_composite(lettering(title,48,color,570,1,outline=INK,title_template=title_template),(125,1))
-        draw.text((141,76),subtitle,font=ImageFont.truetype(str(font_path),19),fill=CREAM,
+        draw.text((141,76),subtitle,font=load_font(subtitle,font_path,19),fill=CREAM,
                   stroke_width=2,stroke_fill=INK)
         draw.rounded_rectangle((185,1180,535,1245),radius=24,fill=INK+(240,))
         text=lettering('别眨眼，好球来了！' if title_template=='legacy' else words(title_template,'teaser_bottom'),30,CREAM,325,title_template=title_template)
@@ -195,20 +204,21 @@ def overlay(path,kind,font_path,index=0,art_theme='default',title_template='lega
         # Transparent replay caption: only glyphs/outline cover the live picture.
         text=lettering('再看一次' if title_template=='legacy' else words(title_template,'replay'),37,COLORS[0],207,-2,outline=INK,title_template=title_template)
         canvas.alpha_composite(text,(29,125))
-        draw.text((228,145),'0.67×',font=ImageFont.truetype(str(font_path),28),fill=CREAM,
+        draw.text((228,145),'0.67×',font=load_font('0.67×',font_path,28),fill=CREAM,
                   stroke_width=2,stroke_fill=INK)
         draw.rectangle((0,111,719,874),outline=COLORS[0]+(255,),width=4)
     canvas.save(path)
 
 
 def title_card(item,title,font_path,top_k,art_theme='default',title_template='legacy',design_suite='custom'):
+    if not isinstance(title,str) or not title.strip():raise ValueError('标题文字不能为空')
     if design_suite!='custom':
         from .design_suites import SuiteCard
         return SuiteCard(item,title,top_k,design_suite,get_template(title_template).language).image(45)
     if title_template!='legacy':
         from .title_templates import title_card as template_card
         return template_card(item,title,font_path,top_k,art_theme,title_template)
-    from PIL import Image,ImageDraw,ImageFont
+    from PIL import Image,ImageDraw
     theme=get_theme(art_theme)
     INK,CREAM,COLORS=theme.ink,theme.cream,theme.colors
     canvas=Image.new('RGBA',(720,1280),CREAM+(255,))
@@ -220,7 +230,6 @@ def title_card(item,title,font_path,top_k,art_theme='default',title_template='le
     draw.arc((569,148,650,229),-35,230,fill=INK,width=5)
     draw.line((636,269,676,284),fill=INK,width=5)
     draw.line((60,644,92,629),fill=INK,width=5)
-    small=ImageFont.truetype(str(font_path),21)
     prepare_brand()
     logo=sticker(LOGO_PNG,(490,134))
     canvas.alpha_composite(logo,((720-logo.width)//2,21))
@@ -235,8 +244,10 @@ def title_card(item,title,font_path,top_k,art_theme='default',title_template='le
         canvas.alpha_composite(text,((720-text.width)//2,y+i*102))
     draw.line((188,999,332,1004,532,996),fill=color,width=10)
     caption=f'{chapter_label(item["rank"],top_k)}  /  接着看这一球'
+    small=load_font(caption,font_path,21)
     draw.text(((720-draw.textlength(caption,font=small))/2,1040),caption,font=small,fill=INK)
-    draw.text((205,1173),'日常排球，也有高光时刻',font=small,fill=CREAM)
+    footer='日常排球，也有高光时刻'
+    draw.text((205,1173),footer,font=load_font(footer,font_path,21),fill=CREAM)
     return canvas.convert('RGB')
 
 

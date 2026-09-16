@@ -48,7 +48,7 @@ Runtime wheels are separately resolved and hash-pinned in `uv.lock`. In particul
 - EasyOCR carries [Apache-2.0 terms](https://github.com/JaidedAI/EasyOCR/blob/master/LICENSE).
   VolleyMole calls the installed library; it does not copy the other project's
   number-detection implementation.
-- PyTorch, Transformers, ONNX Runtime, OpenCV, PyAV, NumPy, SciPy, Pillow and the
+- PyTorch, Transformers, ONNX Runtime, OpenCV, PyAV, NumPy, SciPy, Pillow, FontTools and the
   CUDA runtime wheels retain their respective notices in the installed distributions.
   CUDA libraries are not re-exported as VolleyMole assets.
 - FFmpeg/FFprobe are external executables. The current encoder is `libx264`;

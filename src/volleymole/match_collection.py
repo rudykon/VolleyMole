@@ -10,6 +10,7 @@ import time
 from .common import APP,ROOT,Stages,digest,read_json,save_json,run
 from .run_match import argument_parser,verify,validate_event_arguments,resolved_analysis_mode
 from .sources import source_for
+from .font_support import font_fingerprint
 
 VIDEO_EXTENSIONS={'.mp4','.mov','.mkv','.avi','.m4v','.webm','.mts','.m2ts'}
 NAME=re.compile(r'^(\d{4})\.(\d{1,2})\.(\d{1,2})\.(\d+)$')
@@ -202,14 +203,14 @@ def execute_match(args,day,sets):
         suffix='_lively' if args.style=='lively' else ''
         report_path=directory/f'render_report{suffix}.json'
         render_sig={**signature,'decision':digest(directory/'edit_decision.json'),'config':read_json(directory/'run_config.json'),
-                    'font':digest(args.font),'assets':[digest(p) for p in asset_paths(art,title,transition,args.design_suite)]
+                    'fonts':font_fingerprint(args.font),'assets':[digest(p) for p in asset_paths(art,title,transition,args.design_suite)]
                     if args.style=='lively' else []}
         def make_video():
             render(directory,args.font,args.style,args.render_workers,art,title,transition,args.design_suite,args.design_language,args.quality)
             report=read_json(report_path)
             return report['output'],[report_path,report['output']]+[c['path'] for c in report.get('segments',report['clips'])]
         output=stages.execute('render',render_sig,make_video)
-        stages.execute('verify',{'output':digest(output),'report':digest(report_path),'code':code},
+        stages.execute('verify',{'output':digest(output),'report':digest(report_path),'code':code,'fonts':font_fingerprint(args.font)},
                        lambda:verify(directory,args.top_k,args.style,sys.executable))
         result={'date':day,'status':'passed','sets':[{'number':n,'path':str(p)} for n,p in sets],
                 'analysis_mode':args.analysis_mode,'ranking_mode':decision.get('ranking_mode'),'fallback':decision.get('fallback'),

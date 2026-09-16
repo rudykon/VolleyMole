@@ -6,13 +6,14 @@ import subprocess
 import sys
 import cv2
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
-from .common import ROOT, DEFAULT_FONT, read_json, save_json
+from PIL import Image, ImageDraw
+from .common import ROOT, read_json, save_json
 from .art_themes import THEME_IDS, get_theme
 from .title_templates import TEMPLATE_IDS, get_template
 from .transitions import STYLE_IDS, validate_style
 from .design_suites import SUITE_IDS, resolve_design, palette
 from .sources import source_for
+from .font_support import DEFAULT_FONT, load_font, validate_render_fonts, normalize_text
 
 FONT = str(DEFAULT_FONT)
 
@@ -44,6 +45,26 @@ def previews(directory, rally_ids=None, workers=1):
     with ThreadPoolExecutor(max_workers=workers) as pool:
         list(pool.map(extract,jobs))
     save_json(directory/'previews/index.json',{'files':outputs})
+
+
+def _classic_header(item,count,font_path,collection='highlights'):
+    title=item['title']
+    if not isinstance(title,str) or not title.strip():raise ValueError('标题文字不能为空')
+    title=normalize_text(title).replace('\n',' ')
+    header=Image.new('RGB',(720,110),(15,23,36))
+    draw=ImageDraw.Draw(header)
+    draw.rounded_rectangle((20,18,114,92),radius=12,fill=(248,190,54))
+    rank=f"#{item['rank']}"
+    draw.text((35,27),rank,font=load_font(rank,font_path,42),fill=(18,23,31))
+    for size in range(32,3,-1):
+        font=load_font(title,font_path,size)
+        if draw.textlength(title,font=font)<=560:break
+    else:raise ValueError('标题过长，无法在安全区内排版')
+    draw.text((134,18),title,font=font,fill='white')
+    caption='排球趣味时刻' if collection=='bloopers' else f'日常排球{count}佳球'
+    caption='VOLLEYMOLE  /  '+caption
+    draw.text((135,65),caption,font=load_font(caption,font_path,20),fill=(169,187,207))
+    return header
 
 
 def render_clip(directory, item, manifest, font_path, center_only=False, style='classic', art_theme='default',title_template='legacy',design_suite='custom',quality='720p'):
@@ -84,26 +105,16 @@ def render_clip(directory, item, manifest, font_path, center_only=False, style='
     detail_top=0 if style=='lively' else header_h
     picture_h=header_h+detail_h-detail_top
     # The inset keeps all players visible even when the detail crop follows a ball.
-    font=ImageFont.truetype(str(font_path),32)
-    small=ImageFont.truetype(str(font_path),20)
-    header=Image.new('RGB',(720,header_h),(15,23,36))
-    draw=ImageDraw.Draw(header)
-    draw.rounded_rectangle((20,18,114,92),radius=12,fill=(248,190,54))
-    draw.text((35,27),f"#{item['rank']}",font=ImageFont.truetype(str(font_path),42),fill=(18,23,31))
-    title=item['title']
-    while draw.textlength(title,font=font)>560:
-        font=ImageFont.truetype(str(font_path),font.size-1)
-    draw.text((134,18),title,font=font,fill='white')
     decision = read_json(directory/'edit_decision.json')
     count = len(decision['selected'])
-    caption = '排球趣味时刻' if decision.get('collection') == 'bloopers' else f'日常排球{count}佳球'
-    draw.text((135,65),'VOLLEYMOLE  /  '+caption,font=small,fill=(169,187,207))
-    header_array=cv2.cvtColor(np.asarray(header),cv2.COLOR_RGB2BGR)
     lively=None
     if style=='lively':
         from .presentation import lively_headers
         from .illustrated import composite_header
         lively=lively_headers(item,font_path,count,art_theme,title_template,design_suite,decision.get('collection','highlights'))
+    else:
+        header=_classic_header(item,count,font_path,decision.get('collection','highlights'))
+        header_array=cv2.cvtColor(np.asarray(header),cv2.COLOR_RGB2BGR)
     accent=palette(art_theme,design_suite).colors[1][::-1] if style=='lively' else (54,190,248)
     court_label=None
     if style=='lively' and design_suite!='custom':
@@ -204,6 +215,7 @@ def render(directory,font,style='classic',workers=1,art_theme=None,title_templat
     manifest=read_json(directory/'match_manifest.json');decision=read_json(directory/'edit_decision.json')
     from .schemas import validate_decision
     validate_decision(decision,manifest,directory,len(decision['selected']))
+    font_validation=validate_render_fonts(decision,font,'classic')
     def render_item(item):
         print(f"渲染 #{item['rank']} {item['rally_id']}",flush=True)
         try:
@@ -216,7 +228,9 @@ def render(directory,font,style='classic',workers=1,art_theme=None,title_templat
         clips=list(pool.map(render_item,reversed(decision['selected'])))
     output=directory/f'top{len(clips)}.mp4'
     concatenate_segments(clips,output,quality)
-    save_json(directory/'render_report.json',{'output_quality':q.report(),'output':str(output),'order':'countdown','clips':clips,'expected_duration_sec':sum(r['duration_sec'] for r in clips)})
+    save_json(directory/'render_report.json',{'output_quality':q.report(),'output':str(output),'order':'countdown',
+        'font_path':str(font),'font_validation':font_validation,
+        'clips':clips,'expected_duration_sec':sum(r['duration_sec'] for r in clips)})
 
 
 def concatenate_segments(clips,output,quality='720p'):

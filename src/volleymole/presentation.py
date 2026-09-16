@@ -184,6 +184,8 @@ def render_lively(directory, font, workers=1, art_theme='default',title_template
         if not asset.is_file():raise ValueError(f'缺失内置风格素材：{asset}')
     manifest = read_json(directory/'match_manifest.json'); decision = read_json(directory/'edit_decision.json')
     validate_decision(decision,manifest,directory,len(decision['selected']))
+    from .font_support import validate_render_fonts
+    font_validation=validate_render_fonts(decision,font,'lively',title_template)
     segments = build_timeline(decision,manifest,title_template,transition_style)
     for segment in segments:
         segment['design_suite']=design_suite
@@ -235,6 +237,7 @@ def render_lively(directory, font, workers=1, art_theme='default',title_template
         'art_theme':art_theme,'art_theme_label':theme.label,
         'render_workers':workers,'collection':decision.get('collection','highlights'),
         'font_path':str(font),
+        'font_validation':font_validation,
         'header_background':'transparent',
         'teaser_header_background':'transparent',
         'replay_caption_background':'transparent',

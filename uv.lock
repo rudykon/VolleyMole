@@ -967,6 +967,7 @@ source = { editable = "." }
 dependencies = [
     { name = "av", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "easyocr", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "fonttools", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "numpy", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "onnxruntime-gpu", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "opencv-python-headless", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
@@ -982,6 +983,7 @@ dependencies = [
 requires-dist = [
     { name = "av", specifier = "==18.1.0" },
     { name = "easyocr", specifier = "==1.7.2" },
+    { name = "fonttools", specifier = "==4.64.0" },
     { name = "numpy", specifier = "==2.3.5" },
     { name = "onnxruntime-gpu", specifier = "==1.24.1" },
     { name = "opencv-python-headless", specifier = "==4.13.0.92" },
