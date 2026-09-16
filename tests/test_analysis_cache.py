@@ -10,6 +10,15 @@ from volleymole.common import identity, save_json, digest
 
 
 class CacheTests(unittest.TestCase):
+    def setUp(self):
+        # These tests exercise cache identity, not installed inference backends.
+        self.package_versions = {name: '1.0.0' for name in (
+            'torch', 'torchvision', 'transformers', 'ultralytics', 'onnxruntime-gpu',
+            'numpy', 'av', 'opencv-python-headless', 'easyocr')}
+        versions = patch('importlib.metadata.version', side_effect=self.package_versions.__getitem__)
+        versions.start()
+        self.addCleanup(versions.stop)
+
     def test_fingerprint_uses_content_models_device_and_ocr_not_output_path(self):
         source = {'path':'/first.mp4','sha256':'a'*64,'bytes':123}
         registry = SimpleNamespace(entries={'ball':{'sha256':'b'*64}})
@@ -23,8 +32,11 @@ class CacheTests(unittest.TestCase):
         self.assertNotEqual(baseline,signature(device='cpu'))
         self.assertNotEqual(baseline,signature(number=12))
         self.assertNotEqual(baseline,signature(confidence=.8))
-        with patch('importlib.metadata.version',return_value='changed-version'):
-            self.assertNotEqual(baseline,signature())
+        self.assertEqual(inference_signature(source,registry,'cuda:0',None,.75)['environment'],
+                         self.package_versions)
+        for package in self.package_versions:
+            with self.subTest(package=package), patch.dict(self.package_versions, {package: '2.0.0'}):
+                self.assertNotEqual(baseline,signature())
 
     def test_four_gpu_assignment_and_order_enter_cache_key_without_initializing_cuda(self):
         source = {'sha256':'a'*64,'bytes':123}

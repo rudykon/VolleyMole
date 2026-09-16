@@ -202,7 +202,8 @@ def execute_match(args,day,sets):
         suffix='_lively' if args.style=='lively' else ''
         report_path=directory/f'render_report{suffix}.json'
         render_sig={**signature,'decision':digest(directory/'edit_decision.json'),'config':read_json(directory/'run_config.json'),
-                    'font':digest(args.font),'assets':[digest(p) for p in asset_paths(art,title,transition,args.design_suite)]}
+                    'font':digest(args.font),'assets':[digest(p) for p in asset_paths(art,title,transition,args.design_suite)]
+                    if args.style=='lively' else []}
         def make_video():
             render(directory,args.font,args.style,args.render_workers,art,title,transition,args.design_suite,args.design_language,args.quality)
             report=read_json(report_path)

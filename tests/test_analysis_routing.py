@@ -111,7 +111,12 @@ class AnalysisRoutingTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        # Rendering is mocked; only stable bytes for its font fingerprint matter.
+        self.font = self.root/'font.fixture'
+        self.font.write_bytes(b'font fingerprint fixture, not a renderable font')
         self.stack = contextlib.ExitStack(); self.addCleanup(self.stack.close)
+        self.art_assets = self.stack.enter_context(patch('volleymole.illustrated.asset_paths',
+            side_effect=AssertionError('Classic routing must not read lively artwork')))
         self.stack.enter_context(patch.dict(os.environ, {'VOLLEYMOLE_API_KEY': 'local-test-key',
             'OPENAI_API_KEY': '', 'VOLLEYMOLE_MODEL': '', 'VOLLEYMOLE_VISION_MODEL': ''}))
         self.stack.enter_context(patch('volleymole.semantic.request_json',
@@ -125,6 +130,7 @@ class AnalysisRoutingTests(unittest.TestCase):
 
     def common_options(self):
         return ['--top-k', '10', '--style', 'classic', '--no-sound-model', '--model', 'glm-5.3-flash',
+                '--font', str(self.font),
                 '--llm-config', str(self.root/'absent-config.json'),
                 '--analysis-cache-dir', str(self.root/'cache')]
 
@@ -196,6 +202,7 @@ class AnalysisRoutingTests(unittest.TestCase):
 
     def assert_rally_run(self, output, rank_call, verify_call, *, fallback=False):
         self.discovery.assert_not_called(); self.collections.assert_not_called()
+        self.art_assets.assert_not_called()
         rank_call.assert_called_once()
         verify_call.assert_called_once_with(output, 10, 'classic', sys.executable)
         config = read_json(output/'run_config.json')
