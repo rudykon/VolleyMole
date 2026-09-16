@@ -8,7 +8,7 @@ import re
 import sys
 import time
 from .common import APP,ROOT,Stages,digest,read_json,save_json,run
-from .run_match import argument_parser,verify,validate_event_arguments
+from .run_match import argument_parser,verify,validate_event_arguments,resolved_analysis_mode
 from .sources import source_for
 
 VIDEO_EXTENSIONS={'.mp4','.mov','.mkv','.avi','.m4v','.webm','.mts','.m2ts'}
@@ -39,12 +39,14 @@ def discover_matches(directory):
 
 def merge_manifests(parts,directory,match_date):
     """No video concat or clock shifting: IDs and file paths are namespaced."""
-    sources={};rallies=[];config=None
+    sources={};rallies=[];config=None;selection_modes=set()
     for number,part in parts:
         manifest=read_json(part/'match_manifest.json')
         if 'sources' in manifest:raise ValueError('分局输入不能再次包含整场合并清单')
         if config is not None and config!=manifest['config']:raise ValueError('各局分析配置不一致，不能比较回合分数')
         config=manifest['config']
+        selection_modes.add(manifest.get('selection_mode'))
+        if len(selection_modes)>1:raise ValueError('各局候选选择模式不一致，不能比较回合分数')
         prefix=part.relative_to(directory).as_posix()
         key=f'set-{number:04d}'
         sources[key]={**manifest['source'],'set_number':number,'evidence_root':prefix,
@@ -64,7 +66,7 @@ def merge_manifests(parts,directory,match_date):
     return {'match_date':match_date,'time_basis':'source-local seconds; resolve rally.source_id before seeking',
             'source':{'kind':'multi_video','duration_sec':sum(s['duration_sec'] for s in sources.values()),
                       'has_audio':any(s['has_audio'] for s in sources.values()),'set_count':len(sources)},
-            'sources':sources,'config':config,'rallies':rallies,
+            'sources':sources,'config':config,'selection_mode':selection_modes.pop(),'rallies':rallies,
             'ranking_scope':'all eligible rallies across all sets; no per-set highlight quota'}
 
 
@@ -85,6 +87,7 @@ def execute_match(args,day,sets):
     from .media_worker import previews,render
     from .design_suites import resolve_design
     from .illustrated import asset_paths
+    args.analysis_mode=resolved_analysis_mode(args)
     directory=(args.output or ROOT/'runs/matches')/f'{day}-top{args.top_k}'
     directory=directory.resolve();directory.mkdir(parents=True,exist_ok=True)
     started=time.monotonic()
@@ -103,7 +106,7 @@ def execute_match(args,day,sets):
             print(f'[{day}] 分析第 {number} 局：{path.name}',flush=True)
             discovery=None
             event_options=[]
-            if args.ranker!='rules' and args.stop_after!='manifest':
+            if args.analysis_mode=='events' and args.ranker!='rules' and args.stop_after!='manifest':
                 from .common import probe,identity
                 from .event_pipeline import Discovery
                 source=probe(path);source['identity']=identity(path)
@@ -111,10 +114,11 @@ def execute_match(args,day,sets):
                 if frame_cache:
                     save_json(frame_cache/'status.json',{'status':'pending'})
                     event_options=['--event-frame-cache',frame_cache,'--review-fps',args.review_fps]
-                discovery=Discovery(source,part,args,deadline=started+args.analysis_timeout,frame_cache=frame_cache)
+                discovery=Discovery(source,part,args,frame_cache=frame_cache)
             try:
                 run([sys.executable,'-m','volleymole.run_match','--video',path,'--output',part,
-                     '--stop-after','manifest','--ranker','rules',*part_options(args),*event_options],part/'match_analysis.log')
+                     '--stop-after','manifest','--ranker','rules','--analysis-mode',args.analysis_mode,
+                     *part_options(args),*event_options],part/'match_analysis.log')
             except BaseException:
                 if discovery:
                     if frame_cache: save_json(frame_cache/'status.json',{'status':'unavailable'})
@@ -122,7 +126,11 @@ def execute_match(args,day,sets):
                 raise
             parts.append((number,part))
             if discovery:
-                timelines.append((number,discovery.finish(read_json(part/'match_manifest.json'))))
+                try:
+                    timelines.append((number,discovery.finish(read_json(part/'match_manifest.json'))))
+                except BaseException:
+                    discovery.close()
+                    raise
         manifest=merge_manifests(parts,directory,day)
         save_json(directory/'match_manifest.json',manifest)
         stages=Stages(directory)
@@ -133,18 +141,31 @@ def execute_match(args,day,sets):
             for name in targets[targets.index(target):]:stages.data['stages'].pop(name,None)
         art,title,transition=resolve_design(args.design_suite,args.design_language,args.art_theme,args.title_template,args.transition_style)
         save_json(directory/'run_config.json',{'mode':'date_grouped_match','date':day,'top_k':args.top_k,
+            'collection':args.collection,'analysis_mode':args.analysis_mode,'analysis_timeout':args.analysis_timeout,
+            'review_budget_fraction':args.review_budget_fraction,'budget_scope':'per_source',
+            'vision_model':args.vision_model,'model':args.model,'semantic_modality':args.semantic_modality,
+            'semantic_reasoning_effort':args.semantic_reasoning_effort,
+            'semantic_frame_width':args.semantic_frame_width,'semantic_max_tokens':args.semantic_max_tokens,
             'quality':args.quality,'render_workers':args.render_workers,'design_suite':args.design_suite,'design_language':args.design_language,
             'art_theme':art,'title_template':title,'transition_style':transition,'style':args.style})
-        if args.stop_after=='manifest':return {'date':day,'directory':str(directory),'status':'manifest_only'}
-        if args.ranker!='rules':
-            from .event_pipeline import complete_collections
+        if args.stop_after=='manifest':
+            result={'date':day,'directory':str(directory),'status':'manifest_only','analysis_mode':args.analysis_mode}
+            save_json(directory/'match_summary.json',result)
+            return result
+        if args.analysis_mode=='events' and args.ranker!='rules':
+            from .event_pipeline import complete_collections, analysis_summary
             from .events import merge_events
             timeline={'schema_version':1,'events':merge_events([{**e,'source_id':f'set-{n:04d}'}
                 for n,t in timelines for e in t['events']]),'sets':[{'set_number':n,**{k:v for k,v in t.items() if k not in ('events','source')}} for n,t in timelines]}
+            analysis=analysis_summary(timeline)
+            timeline['analysis_status']=analysis['status']
+            timeline['budget_scope']='per_source'
             save_json(directory/'event_timeline.json',timeline)
             args.art_theme,args.title_template,args.transition_style=art,title,transition
             collections=complete_collections(args,manifest,timeline,directory)
-            result={'date':day,'directory':str(directory),'status':'rank_only' if args.stop_after=='rank' else 'collections_completed',
+            status='rank_only' if args.stop_after=='rank' else 'collections_completed'
+            if analysis['status']!='complete': status='analysis_incomplete'
+            result={'date':day,'directory':str(directory),'status':status,'analysis_mode':args.analysis_mode,'analysis':analysis,
                 'collections':collections,'elapsed_sec':round(time.monotonic()-started,3)}
             save_json(directory/'match_summary.json',result)
             return result
@@ -153,7 +174,8 @@ def execute_match(args,day,sets):
         ids=[r['rally_id'] for r in chosen]
         if args.preview_scope=='all':ids=[r['rally_id'] for r in manifest['rallies']]
         code={p.name:digest(p) for p in APP.glob('*.py')}
-        signature={'manifest':digest(directory/'match_manifest.json'),'code':code,'top_k':args.top_k,'mode':args.ranker}
+        signature={'manifest':digest(directory/'match_manifest.json'),'code':code,'top_k':args.top_k,'mode':args.ranker,
+                   'analysis_mode':args.analysis_mode}
         def make_previews():
             previews(directory,ids,args.preview_workers)
             index=directory/'previews/index.json'
@@ -172,7 +194,11 @@ def execute_match(args,day,sets):
             source=source_for(manifest,item['rally_id'])
             selected.append({**item,'source_path':source['path'],'set_number':source['set_number']})
         save_json(directory/'selected_sources.json',{'date':day,'time_basis':'source-local seconds','selected':selected})
-        if args.stop_after=='rank':return {'date':day,'directory':str(directory),'status':'rank_only'}
+        if args.stop_after=='rank':
+            result={'date':day,'directory':str(directory),'status':'rank_only',
+                'analysis_mode':args.analysis_mode,'ranking_mode':decision.get('ranking_mode'),'fallback':decision.get('fallback')}
+            save_json(directory/'match_summary.json',result)
+            return result
         suffix='_lively' if args.style=='lively' else ''
         report_path=directory/f'render_report{suffix}.json'
         render_sig={**signature,'decision':digest(directory/'edit_decision.json'),'config':read_json(directory/'run_config.json'),
@@ -185,6 +211,7 @@ def execute_match(args,day,sets):
         stages.execute('verify',{'output':digest(output),'report':digest(report_path),'code':code},
                        lambda:verify(directory,args.top_k,args.style,sys.executable))
         result={'date':day,'status':'passed','sets':[{'number':n,'path':str(p)} for n,p in sets],
+                'analysis_mode':args.analysis_mode,'ranking_mode':decision.get('ranking_mode'),'fallback':decision.get('fallback'),
                 'eligible_rallies':sum(r['eligible'] for r in manifest['rallies']),'top_k':args.top_k,'output':output,
                 'elapsed_sec':round(time.monotonic()-started,3),'stages':stages.current_run}
         save_json(directory/'match_summary.json',result)

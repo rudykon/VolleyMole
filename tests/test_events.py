@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 import numpy as np
-from volleymole.events import DIMENSIONS, windows, validate_events, merge_events, score_event, select_events
+from volleymole.events import DIMENSIONS, windows, validate_events, merge_events, score_event, select_events, number
 from volleymole.audio_events import measure_audio
 from volleymole.motion_features import relative_motion
 from volleymole.semantic import bounded_map
@@ -35,6 +35,12 @@ def timeline_event(**kwargs):
 
 
 class EventTests(unittest.TestCase):
+    def test_number_rejects_unbounded_json_integers_and_nonfinite_values(self):
+        for value in (10**400, -10**400, float('inf'), float('-inf'), float('nan'), True, '1'):
+            with self.subTest(value=value):
+                self.assertFalse(number(value, 0, 4))
+        self.assertTrue(number(4, 0, 4))
+
     def test_chunks_cover_preparation_and_tail_without_rally_gate(self):
         chunks = list(windows(63, 24, 4))
         self.assertEqual(chunks, [(0,24),(20,44),(40,63)])

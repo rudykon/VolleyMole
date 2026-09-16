@@ -18,7 +18,9 @@ def grouped(indices, times, gap):
     return groups
 
 
-def build_manifest(source, analytics_path, ball_path, pts_path, player_path, directory, config, provenance):
+def build_manifest(source, analytics_path, ball_path, pts_path, player_path, directory, config, provenance, *, selection_mode='events'):
+    if selection_mode not in ('rallies', 'events'):
+        raise ValueError('未知候选选择模式')
     directory = Path(directory)
     with Path(analytics_path).open() as stream:
         records = [json.loads(line) for line in stream]
@@ -134,14 +136,24 @@ def build_manifest(source, analytics_path, ball_path, pts_path, player_path, dir
         features = {'duration': 0., 'flight': min((flight+.75*float(low[s:e].mean()))/.55, 1),
                     'turns': 0., 'actions': float(bool(events)),
                     'coverage': coverage, 'participation': min(participating, 1), 'focus': focus_ratio}
+        if selection_mode=='rallies':
+            # Restore the complete-rally fallback from 4399475. Event discovery
+            # keeps its independent evidence-backed scoring and loose proposals.
+            features.update(duration=min((b-a)/28, 1), turns=min(len(turns)/12, 1),
+                            actions=min(len(events)/5, 1))
         parts = {key: round(config['weights'][key]*v, 3) for key,v in features.items()}
-        # Legacy fallback only; event ranking uses evidence-backed dimensions.
-        score = round(sum(parts.values()), 2)
+        # Sparse-player warmup must not outrank full play in the rally route.
+        quality = min(1., max(.2, participating/.85)**3) if selection_mode=='rallies' else 1.
+        score = round(sum(parts.values())*quality, 2)
         reasons = []
         warnings = []
-        if b-a < config['min_rally_sec']: warnings.append('短回合，需要事件复核')
+        if b-a < config['min_rally_sec']:
+            if selection_mode=='rallies': reasons.append('回合过短')
+            else: warnings.append('短回合，需要事件复核')
         if b-a > config['max_rally_sec']: reasons.append('过长连续片段，回合边界不确定')
-        if coverage < config['min_visible_ratio']: warnings.append('有效球轨迹不足，需要事件复核')
+        if coverage < config['min_visible_ratio']:
+            if selection_mode=='rallies': reasons.append('有效球轨迹不足')
+            else: warnings.append('有效球轨迹不足，需要事件复核')
         if supported < config['min_flight_ratio']: reasons.append('有效运动不足，疑似持球或停顿')
         if not len(good): reasons.append('没有可关联的有效轨迹')
         rid = f'rally_{n:04d}'
@@ -183,6 +195,7 @@ def build_manifest(source, analytics_path, ball_path, pts_path, player_path, dir
         r['safe_start_sec'] = max(0., before, r['start_sec']-config['padding_before_sec'])
         r['safe_end_sec'] = min(source['duration_sec'], after, r['end_sec']+config['padding_after_sec'])
     manifest = {'schema_version': 1, 'project': 'VolleyMole', 'source': source, 'config': config,
+                'selection_mode': selection_mode,
                 'provenance': provenance, 'rallies': rallies, 'diagnostics': {
                     'input_frames': len(t), 'time_alignment_max_error_sec': max(abs(r.get('source_time_s',r['time_s']+pts[0])-p) for r,p in zip(records,pts)),
                     'candidate_count': len(rallies), 'eligible_count': sum(r['eligible'] for r in rallies),

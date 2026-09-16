@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""VolleyMole: resumable full-match event understanding and shared dual collections."""
+"""VolleyMole: complete-rally highlights, with optional event-based collections."""
 import argparse
 import fcntl
 import json
@@ -73,12 +73,19 @@ def argument_parser():
     parser.add_argument('--video',type=Path,required=True)
     parser.add_argument('--top-k',type=int,choices=(5,10),default=5)
     parser.add_argument('--collection',choices=('highlights','bloopers','both'),default='highlights')
+    parser.add_argument('--analysis-mode',choices=('auto','rallies','events'),default='auto',
+                        help='auto：精彩榜使用完整回合排序，趣味/双榜使用事件理解；rallies 恢复旧剪辑流程，events 显式启用事件流程')
     parser.add_argument('--semantic-concurrency',type=int,choices=range(1,17),default=6)
     parser.add_argument('--semantic-max-tokens',type=int,default=4096,
                         help='单次事件理解的最大生成token数（256–16384）；须给视频输入预留上下文空间')
     parser.add_argument('--semantic-frame-width',type=int,
                         help='视频证据帧的最大宽度（64–4096）；不指定则保留粗读512/复核768，不改变FPS或上下文时长')
-    parser.add_argument('--analysis-timeout',type=float,default=1800,help='事件发现与复核共用墙钟预算（秒），从本地推理前启动计时')
+    parser.add_argument('--semantic-reasoning-effort',choices=('none','minimal','low','medium','high','xhigh','max'),
+                        help='事件理解的推理强度；不指定则使用服务默认值，GLM-5.3-Flash 可显式选 low')
+    parser.add_argument('--analysis-timeout',type=float,default=1800,
+                        help='每个源视频的事件分析预算（秒）；多局分别计时，不含等待本地清单和渲染')
+    parser.add_argument('--review-budget-fraction',type=float,default=.4,
+                        help='每局至少留给复核的预算比例（0–1，不含端点）；粗读未用时间也转入复核')
     parser.add_argument('--semantic-retries',type=int,choices=range(3),default=1)
     parser.add_argument('--event-chunk-sec',type=float,default=24)
     parser.add_argument('--event-overlap-sec',type=float,default=4)
@@ -121,7 +128,7 @@ def argument_parser():
     parser.add_argument('--ranker',choices=['auto','rules'],default='auto')
     parser.add_argument('--api-base',default=os.getenv('VOLLEYMOLE_API_BASE','https://api.openai.com/v1'))
     parser.add_argument('--model',default=os.getenv('VOLLEYMOLE_MODEL'))
-    parser.add_argument('--vision-model',default=os.getenv('VOLLEYMOLE_VISION_MODEL'),help='可选独立视觉评审模型；主模型不支持图像时默认从同一服务自动选择')
+    parser.add_argument('--vision-model',default=os.getenv('VOLLEYMOLE_VISION_MODEL'),help='显式指定独立视觉评审模型；不自动切换到其他模型')
     parser.add_argument('--api-timeout',type=float,default=240)
     parser.add_argument('--llm-config',type=Path,default=ROOT/'llm_api.json',help='读取 llm 节点；rank 节点为文本 reranker，不用于生成剪辑单')
     parser.add_argument('--font',default=str(DEFAULT_FONT))
@@ -137,8 +144,20 @@ def argument_parser():
     return parser
 
 
+def resolved_analysis_mode(args):
+    mode=getattr(args,'analysis_mode','auto')
+    return ('rallies' if args.collection=='highlights' else 'events') if mode=='auto' else mode
+
+
 def validate_event_arguments(args, parser):
     import math
+    args.analysis_mode=resolved_analysis_mode(args)
+    if args.analysis_mode=='rallies' and args.collection!='highlights':
+        parser.error('完整回合流程仅支持精彩榜；趣味/双榜请使用 --analysis-mode events --ranker auto')
+    if args.ranker=='rules' and args.analysis_mode=='events' and args.stop_after!='manifest':
+        parser.error('事件理解需要 --ranker auto；本地规则剪辑请使用 --analysis-mode rallies --collection highlights')
+    if not 0 < args.review_budget_fraction < 1:
+        parser.error('review_budget_fraction 必须在 0 与 1 之间（不含端点）')
     if not 256<=getattr(args,'semantic_max_tokens',4096)<=16384:
         parser.error('semantic_max_tokens 必须在 256–16384 之间')
     frame_width=getattr(args,'semantic_frame_width',None)
@@ -151,7 +170,7 @@ def validate_event_arguments(args, parser):
     if args.no_sound_model and (args.sound_model or args.sound_labels or args.sound_thresholds):
         parser.error('--no-sound-model 不能与显式声音模型同时使用')
     if bool(args.sound_model)!=bool(args.sound_labels): parser.error('声音模型与类别文件须一起指定')
-    if not args.no_sound_model and not args.sound_model and args.ranker!='rules':
+    if not args.no_sound_model and not args.sound_model and args.analysis_mode=='events' and args.ranker!='rules':
         model_root=Path(args.models or os.environ.get('VOLLEYMOLE_MODELS',ROOT/'models'))
         model=model_root/'audio/panns_cnn14_sed.pt'
         labels=model_root/'audio/panns_cnn14_sed.labels.json'
@@ -239,12 +258,15 @@ def main(argv=None):
         reused=[r['stage'] for r in stages.current_run if r['status']=='reused']
         data={'started_at_utc':started_at,'finished_at_utc':datetime.now(timezone.utc).isoformat(),
               'style':args.style,'art_theme':args.art_theme,'title_template':args.title_template,'transition_style':args.transition_style,'design_suite':args.design_suite,'design_language':args.design_language,'source_duration_sec':meta['duration_sec'],'total_elapsed_sec':round(total,3),
-              'quality':args.quality,'output_quality':get_quality(args.quality).report(),
+              'quality':args.quality,'analysis_mode':args.analysis_mode,'output_quality':get_quality(args.quality).report(),
               'stages':stages.current_run,'reused_stages':reused,
               'preparation_and_bookkeeping_sec':round(max(0,total-sum(r['elapsed_sec'] for r in stages.current_run)),3),
               'output':str(output) if output else None,
               'scope_note':'本次命令墙钟耗时，包含输入检查、缓存校验、实际执行阶段及成片校验；不包含开发调试。复用的历史推理/API耗时不计入本次。',
               'upstream_modes':{name:read_json(directory/name/'provenance.json').get('mode','optional') for name in ('analytics','tracking','player') if (directory/name/'provenance.json').exists()}}
+        if args.analysis_mode=='rallies' and any(r['stage']=='rank' for r in stages.current_run):
+            decision=read_json(directory/'edit_decision.json')
+            data.update(ranking_mode=decision.get('ranking_mode'),fallback=decision.get('fallback'))
         if (directory/'inference_cache.json').is_file() and any(r['stage']=='inference' for r in stages.current_run):
             cache=read_json(directory/'inference_cache.json')
             fresh='inference' not in reused and cache['cache_status']!='reused'
@@ -257,7 +279,8 @@ def main(argv=None):
             if render_stage not in reused:data['render_breakdown_sec']=rendered.get('render_timing_sec')
         if discovery is not None and (directory/'event_timeline.json').is_file():
             event_report=read_json(directory/'event_timeline.json')
-            data['event_analysis']={k:event_report[k] for k in ('coarse_status','coarse_chunks','coarse_completed','review_completed','budget_sec','elapsed_sec','deadline_reached')}
+            data['event_analysis']={k:event_report[k] for k in ('coarse_status','coarse_chunks','coarse_completed','review_completed','budget_sec','elapsed_sec','deadline_reached',
+                'analysis_status','budget_scope','phase_timing')}
             if (directory/'collections_report.json').is_file():
                 data['collections']=read_json(directory/'collections_report.json')['collections']
         tag=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
@@ -278,7 +301,11 @@ def main(argv=None):
     analytics_cache=args.analytics_cache or cached.get('analytics')
     tracking_cache=args.tracking_cache or cached.get('tracking')
     save_json(directory/'run_config.json',{'video':str(video),'top_k':args.top_k,'focus_player':args.focus_player,
-              'quality':args.quality,'collection':args.collection,
+              'quality':args.quality,'collection':args.collection,'analysis_mode':args.analysis_mode,
+              'analysis_timeout':args.analysis_timeout,'review_budget_fraction':args.review_budget_fraction,
+              'budget_scope':'per_source','vision_model':args.vision_model,'model':args.model,
+              'semantic_modality':args.semantic_modality,
+              'semantic_reasoning_effort':args.semantic_reasoning_effort,
               'semantic_max_tokens':args.semantic_max_tokens,'semantic_frame_width':args.semantic_frame_width,
               'sound_model':str(args.sound_model) if args.sound_model else None,
               'sound_labels':str(args.sound_labels) if args.sound_labels else None,'sound_device':args.sound_device,
@@ -294,7 +321,7 @@ def main(argv=None):
         return [identity(Path(path)/f) for f in files] if path else None
     discovery = None
     frame_cache = args.event_frame_cache
-    if args.ranker != 'rules' and args.stop_after != 'manifest':
+    if args.analysis_mode == 'events' and args.ranker != 'rules' and args.stop_after != 'manifest':
         from .event_pipeline import Discovery
         if args.inference_mode=='shared' and not analytics_cache and not tracking_cache and (args.model or args.vision_model) and (os.getenv('VOLLEYMOLE_API_KEY') or os.getenv('OPENAI_API_KEY')):
             frame_cache = directory/'event_frames'
@@ -324,10 +351,11 @@ def main(argv=None):
                              lambda:ingest_player(video,directory,args.focus_player,args.player_python,args.device,config['player_confidence']))
         def make_manifest():
             data,files=build_manifest(meta,analytics,tracking,directory/'tracking/source_pts.csv',player,directory,config,
-                                     {k:read_json(directory/k/'provenance.json') for k in ('analytics','tracking','player')})
+                                     {k:read_json(directory/k/'provenance.json') for k in ('analytics','tracking','player')},
+                                     selection_mode=args.analysis_mode)
             return str(directory/'match_manifest.json'),files
         manifest_path=stages.execute('rallies',{'analytics':digest(analytics),'tracking':digest(tracking),'pts':digest(directory/'tracking/source_pts.csv'),
-                                    'player':digest(player),'config':config,'code':code['rally.py'],
+                                    'player':digest(player),'config':config,'code':code['rally.py'],'selection_mode':args.analysis_mode,
                                     'evidence_code':code['rally_evidence.py'],'source':meta},make_manifest)
         if args.stop_after=='manifest':finish_timing();return
         manifest=read_json(manifest_path)
@@ -358,6 +386,7 @@ def main(argv=None):
                        'code':functions_digest(APP/'media_worker.py',{'previews','frame_at'})}
     stages.execute('previews',preview_signature,make_previews)
     decision=stages.execute('rank',{'manifest':digest(manifest_path),'k':args.top_k,'focus':args.focus_player,'ranker':args.ranker,
+                            'analysis_mode':args.analysis_mode,
                             'model':args.model,'endpoint':args.api_base,'has_key':bool(os.getenv('VOLLEYMOLE_API_KEY') or os.getenv('OPENAI_API_KEY')),
                             'code':code['ranker.py'],'schema':code['schemas.py'],'semantic':code['semantic.py'],'vision_model':args.vision_model,
                             'prompt':digest(APP/'prompts/rank_top_plays.md'),'vision_prompt':digest(APP/'prompts/review_frames.md')},

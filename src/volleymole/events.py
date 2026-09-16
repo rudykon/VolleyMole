@@ -12,7 +12,8 @@ DIMENSIONS = tuple(k for group in WEIGHTS.values() for k in group)
 
 
 def number(value, low, high):
-    return type(value) in (int, float) and math.isfinite(value) and low <= value <= high
+    # Check bounds before converting an arbitrary JSON integer to a C double.
+    return type(value) in (int, float) and low <= value <= high and math.isfinite(value)
 
 
 def windows(duration, length=24., overlap=4.):

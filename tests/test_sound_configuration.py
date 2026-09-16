@@ -35,7 +35,7 @@ class SoundConfigurationTests(unittest.TestCase):
 
     def arguments(self, *extra):
         parser = argument_parser()
-        args = parser.parse_args(['--video', 'fixture.mp4', *map(str, extra)])
+        args = parser.parse_args(['--video', 'fixture.mp4', '--analysis-mode', 'events', *map(str, extra)])
         with contextlib.redirect_stderr(io.StringIO()):
             validate_event_arguments(args, parser)
         return args
@@ -68,11 +68,20 @@ class SoundConfigurationTests(unittest.TestCase):
 
     def test_disable_and_rules_mode_do_not_enable_installed_model(self):
         self.assets(self.root/'models')
-        for extra in (('--no-sound-model',), ('--ranker', 'rules')):
+        for extra in (('--no-sound-model',), ('--ranker', 'rules', '--analysis-mode', 'rallies')):
             with self.subTest(extra=extra):
                 args = self.arguments(*extra)
                 self.assertIsNone(args.sound_model)
                 self.assertIsNone(args.sound_labels)
+
+    def test_default_rally_route_does_not_load_event_sound_model(self):
+        self.assets(self.root/'models')
+        parser = argument_parser()
+        args = parser.parse_args(['--video', 'fixture.mp4'])
+        validate_event_arguments(args, parser)
+        self.assertEqual(args.analysis_mode, 'rallies')
+        self.assertIsNone(args.sound_model)
+        self.assertIsNone(args.sound_labels)
 
     def test_partial_install_is_not_auto_enabled(self):
         model, labels = self.assets(self.root/'models')

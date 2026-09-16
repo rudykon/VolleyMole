@@ -40,23 +40,24 @@ class VisionRoutingTests(unittest.TestCase):
             self.assertEqual(error.exception.reason,reason)
             self.assertNotIn(content,str(error.exception))
 
-    def test_text_only_primary_routes_through_visual_reviewer(self):
+    def test_text_only_primary_does_not_implicitly_switch_models(self):
         error=HTTPError('https://example.invalid',400,'Bad request',{},io.BytesIO(b'{"message":"not a multimodal model"}'))
         with patch.dict('os.environ',{'VOLLEYMOLE_API_KEY':'test-token'}), \
-             patch('volleymole.ranker.api_decision',side_effect=[error,self.decision]) as generation, \
-             patch('volleymole.ranker.choose_vision_model',return_value=('vision-model',['text-model','vision-model'])), \
-             patch('volleymole.ranker.visual_reviews',return_value=(self.review_rows(),[],[])):
+             patch('volleymole.ranker.api_decision',side_effect=error) as generation, \
+             patch('volleymole.semantic.choose_vision_model') as choose, \
+             patch('volleymole.ranker.visual_reviews') as reviews:
             path,_=rank(self.manifest,self.root,5,None,'auto','https://example.invalid/v1','text-model')
         result=read_json(path)
-        self.assertEqual(result['ranking_mode'],'vision_then_text_api')
-        self.assertEqual(result['model'],'text-model')
-        self.assertEqual(result['vision_model'],'vision-model')
-        self.assertIsNotNone(generation.call_args.kwargs['reviews'])
+        self.assertEqual(result['ranking_mode'],'rules_fallback')
+        self.assertEqual(result['fallback']['http_status'],400)
+        self.assertEqual(generation.call_count,1)
+        choose.assert_not_called()
+        reviews.assert_not_called()
 
     def test_unrelated_400_does_not_change_models(self):
         error=HTTPError('https://example.invalid',400,'Bad request',{},io.BytesIO(b'{"message":"context too long"}'))
         with patch.dict('os.environ',{'VOLLEYMOLE_API_KEY':'test-token'}), \
-             patch('volleymole.ranker.api_decision',side_effect=error),patch('volleymole.ranker.choose_vision_model') as choose:
+             patch('volleymole.ranker.api_decision',side_effect=error),patch('volleymole.semantic.choose_vision_model') as choose:
             path,_=rank(self.manifest,self.root,5,None,'auto','https://example.invalid/v1','test-model')
         choose.assert_not_called()
         self.assertEqual(read_json(path)['ranking_mode'],'rules_fallback')

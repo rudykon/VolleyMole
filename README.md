@@ -8,9 +8,9 @@
   <p><a href="#快速开始">快速开始</a> · <a href="#五套插画风格">插画风格</a> · <a href="#四卡加速">四卡加速</a> · <a href="#文档与开发">文档</a> · <a href="#致谢与参考">致谢</a></p>
 </div>
 
-> 自动分析现已使用全场事件理解：`--collection highlights|bloopers|both`。双榜共享粗读、复核与缓存，支持不足数量输出。接口能力、本地声音模型协议和验收方式见 [事件理解与双榜](docs/事件理解与双榜.md)。
+> 默认精彩集锦已恢复完整回合剪辑：候选预筛 → 可选语义排序 → 失败时明确记录规则兜底 → 渲染和源内容校验。`--analysis-mode events` 显式启用事件理解；`--collection both|bloopers` 也自动选择事件路线。双榜能力和限制见 [事件理解与双榜](docs/事件理解与双榜.md)。
 
-声音模型可用 `.venv/bin/python scripts/install_sound_model.py` 安装作者发布的 PANNs 事件检测权重，安装后自动启用。无需自行标注数据。部署见[声音模型部署](docs/声音模型部署.md)，已有标签、实测结果与未验证项见[公开数据验收记录](docs/公开数据验收记录.md)。
+声音模型可用 `.venv/bin/python scripts/install_sound_model.py` 安装作者发布的 PANNs 事件检测权重，安装后在事件路线自动启用。无需自行标注数据。部署见[声音模型部署](docs/声音模型部署.md)，已有标签、实测结果与未验证项见[公开数据验收记录](docs/公开数据验收记录.md)。
 
 真实原标注数据上的动作定位改进、可选本地时序模型接入及当前效果边界见[动作准确性改进与五大囧基准](docs/动作准确性改进与五大囧基准.md)。[五大囧人工评分基准](docs/五大囧人工评分基准.md)已提供匿名离线评分页面与指标工具；目前没有新增真人评分。
 
@@ -20,12 +20,11 @@
 
 ## 从比赛录像到高光成片
 
-VolleyMole 面向单机位排球录像：在本地识别比赛状态、动作、人物和球轨迹，将本地多源测量与全场分块音视频理解合并为事件时间轴，再确定性生成竞技与趣味双榜，默认输出 **1080 × 1920、30 fps** 的竖屏视频，支持 720p、1440p 和 4K 画质选项。
+VolleyMole 面向单机位排球录像：在本地识别比赛状态、动作、人物和球轨迹，默认从完整回合中生成五佳球或十佳球，也可选择全场事件理解生成竞技与趣味双榜。默认输出 **1080 × 1920、30 fps** 的竖屏视频，支持 720p、1440p 和 4K 画质选项。
 
 ```text
-比赛录像 → 共享解码＋全场粗读 → 事件融合与一次复核 → 双榜评分 → 渲染与校验
-                              ↓                  ↓
-                        可追溯事实与证据       五佳球／十佳球＋五大囧
+默认：比赛录像 → 本地完整回合 → 候选预筛／语义排序（可规则兜底）→ 渲染与校验
+可选：比赛录像 → 本地分析＋全场粗读 → 事件复核与双榜评分 → 渲染与校验
 ```
 
 | 能力 | 说明 |
@@ -33,7 +32,7 @@ VolleyMole 面向单机位排球录像：在本地识别比赛状态、动作、
 | 完整回合 | 保留检测到的回合及前后上下文，记录边界与遮挡的不确定性 |
 | 跟球构图 | 球轨迹引导竖屏裁切，同时保留全场概览 |
 | 活力版呈现 | 5 秒快切片头、中文倒计时排名、插画转场、短慢回放与现场原声 |
-| 两种排名方式 | 自动模式使用事件理解和双榜评分；显式纯规则模式无需 API |
+| 排名与路线 | 默认完整回合语义排序并保留规则兜底；显式纯规则模式无需 API；事件双榜单独选择 |
 | 球员关注 | 可按球衣号码记录球员出现证据，OCR 按需启动 |
 | 缓存与恢复 | 按素材、模型和配置校验分析缓存，支持从排名或渲染阶段重做 |
 | 四卡流水线 | 支持跨批推理、辅助检测分卡及独立回合并行渲染 |
@@ -88,7 +87,7 @@ uv sync --locked
 # 先查看分组，不推理、不生成文件
 .venv/bin/volleymole match --input-dir data/样例视频 --list
 
-# 指定一场，默认十佳球、1080p、中文；自动模式需要配置音视频理解接口
+# 指定一场，默认完整回合十佳球、1080p、中文；配置 API 则尝试语义排序，否则明确使用规则排序
 .venv/bin/volleymole match --input-dir data/样例视频 --date 2026.1.6 \
   --devices cuda:0,cuda:1,cuda:2,cuda:3 \
   --pipeline-depth 2 --auxiliary-device cuda:0 --vball-engine ort-bound \
@@ -98,9 +97,11 @@ uv sync --locked
 .venv/bin/volleymole match --input-dir data/样例视频 --device cuda:0
 ```
 
-自动模式输出至 `runs/matches/2026-01-06-top10/collections/highlights/`；趣味集锦位于同级 `bloopers/`，默认最多十段竞技素材。显式 `--ranker rules` 保留原输出目录。`--output` 指定所有场次的父目录；英文增加 `--design-language en`，画质和五套模板选项保持一致。原有 `run --video ...` 仍是单视频用法，默认五佳球。
+默认输出为 `runs/matches/2026-01-06-top10/top10_lively.mp4`。`--analysis-mode auto`（默认）在精彩榜选择完整回合路线，在趣味/双榜选择事件路线；`--analysis-mode rallies|events` 可显式指定。事件路线输出到 `collections/highlights/`、`collections/bloopers/`。`--output` 指定所有场次的父目录；英文增加 `--design-language en`，画质和五套模板选项保持一致。原有 `run --video ...` 仍是单视频用法，默认五佳球。
 
 当前样例目录分为 **2026-01-06（4 局）、2026-09-02（3 局）、2026-09-08（3 局）**。局号按数字排序；重复局号、无效日期或不符合命名格式的视频会报错，缺局会提示。更多规则与来源追溯见 [整场多局十佳球](docs/整场多局十佳球.md)。
+
+事件路线的 `--analysis-timeout 1800` 为每局独立预算，默认粗读最多使用 60%，至少 40% 留给复核（`--review-budget-fraction 0.4`）。等待本地回合清单不会消耗复核保留时间。任何一局事件分析未完成时，汇总标记 `analysis_incomplete`；零段且分析未完成不能作为“整场无精彩素材”的结论。默认回合路线不启动全场事件请求，规则兜底会记录 `ranking_mode=rules_fallback`，不冒充语义识别成功。
 
 ## 四卡加速
 
@@ -228,11 +229,13 @@ uv sync --locked
 
 将 [llm_api.example.json](llm_api.example.json) 复制为本地 `llm_api.json`，填写服务地址、模型名称和 API 密钥；该本地文件已被 Git 忽略。也可配置 `VOLLEYMOLE_API_KEY`、`VOLLEYMOLE_API_BASE`、`VOLLEYMOLE_MODEL` 环境变量。
 
-配置后用 `--ranker auto`（或省略 `--ranker`）运行，可加 `--collection both`。新链路按块发送**覆盖全场的采样视频帧和同步音频**，并为候选提供一次更密集的上下文复核。失败、超时或证据不足时记录未完成项，使用已获得的有效事件；不伪造结果或凑数。`--ranker rules` 完全关闭 API 请求。接口协议、声音模型接入和缓存说明见 [事件理解与双榜](docs/事件理解与双榜.md)。
+配置后用默认 `--ranker auto` 运行：完整回合路线只发送预筛候选的三张关键帧及检测摘要，尝试由配置的模型生成剪辑单；失败或未配置 API 时明确记录规则兜底。仅显式 `--vision-model` 才使用独立视觉评审，不查询模型列表或隐式换模型。`--ranker rules` 完全关闭 API 请求。
+
+添加 `--analysis-mode events` 或 `--collection both|bloopers` 才进入全场事件路线：按块发送采样视频帧及可选同步音频，使用严格九维事实校验，允许不足数量；失败仍记录未完成项，不自动转成完整回合榜。接口协议、声音模型接入和缓存说明见 [事件理解与双榜](docs/事件理解与双榜.md)。
 
 ## 输出与可追溯性
 
-自动模式的共用事件保存在 `event_timeline.json`，两类成片分别位于 `collections/highlights/`、`collections/bloopers/`，实际数量和不足原因见 `collections_report.json`。每个非空榜单目录都保存 `verification[_lively].json`（完整解码、帧数、音视频起点与时长）和 `alignment_verification[_lively].json`（成片对原片的画面抽样比对与原声互相关）。下面为显式规则模式的原有目录：
+事件路线的共用事件保存在 `event_timeline.json`，两类成片分别位于 `collections/highlights/`、`collections/bloopers/`，实际数量和不足原因见 `collections_report.json`。每个非空榜单目录都保存 `verification[_lively].json`（完整解码、帧数、音视频起点与时长）和 `alignment_verification[_lively].json`（成片对原片的画面抽样比对与原声互相关）。下面为默认完整回合路线及显式规则模式的目录：
 
 ```text
 runs/match-top5/

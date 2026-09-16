@@ -4,7 +4,7 @@ import sys
 
 
 def main():
-    parser = argparse.ArgumentParser(prog='volleymole', description='一次事件分析 → 五佳球／十佳球与五大囧')
+    parser = argparse.ArgumentParser(prog='volleymole', description='完整回合五佳球／十佳球；可选事件理解双榜')
     parser.add_argument('command', choices=['run','match','infer','models','verify'])
     if len(sys.argv)==1 or sys.argv[1] in ('-h','--help'):
         parser.print_help()

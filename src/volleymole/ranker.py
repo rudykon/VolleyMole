@@ -1,10 +1,12 @@
 import json
 import os
+from http.client import HTTPException
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from .common import APP, save_json
+from .llm_transport import TransportError
 from .schemas import DECISION_SCHEMA, validate_decision
-from .semantic import candidate_fields, image_parts, request_json, choose_vision_model, visual_reviews, ResponseContractError
+from .semantic import candidate_fields, image_parts, request_json, visual_reviews, ResponseContractError
 
 
 def shortlist(manifest, top_k):
@@ -18,10 +20,19 @@ def rule_decision(candidates, top_k):
     selected=[]
     pool=sorted(candidates,key=lambda r:(-r['rule_score'],r.get('source_id','single'),r['start_sec']))
     while pool and len(selected)<top_k:
-        best=pool.pop(0)
-        if any(s.get('source_id')==best.get('source_id') and max(s['safe_start_sec'],best['safe_start_sec']) <
+        # Restore the legacy mild diversity penalty without comparing clocks
+        # from different source videos or inventing evidence for variety.
+        def adjusted(r):
+            penalty=sum(3 for s in selected if s.get('source_id','single')==r.get('source_id','single')
+                        and abs(s['start_sec']-r['start_sec'])<90)
+            penalty+=sum(1 for s in selected if s['actions']==r['actions'])
+            return r['rule_score']-penalty
+        best=max(pool,key=adjusted);pool.remove(best)
+        if any(s.get('source_id','single')==best.get('source_id','single') and max(s['safe_start_sec'],best['safe_start_sec']) <
                min(s['safe_end_sec'],best['safe_end_sec']) for s in selected): continue
         selected.append(best)
+    if len(selected)<top_k:
+        raise ValueError(f'只有 {len(selected)} 个不重叠的有效回合，不能生成 {top_k} 佳球')
     result=[]
     titles=['多拍攻防','连续往返','防守与配合','耐心组织','攻防交锋']
     for rank,r in enumerate(selected,1):
@@ -68,30 +79,35 @@ def rank(manifest,directory,top_k,focus,mode,endpoint,model,timeout=90,vision_mo
     semantic_files=[];requests=[];routing=None
     if mode!='rules' and key and model:
         try:
-            if not vision_model:
-                try:
-                    decision=api_decision(candidates,directory,top_k,focus,endpoint,model,key,timeout,audit=requests)
-                except HTTPError as exc:
-                    body=exc.read().decode(errors='replace')
-                    exc.close()
-                    if exc.code!=400 or 'not a multimodal model' not in body.lower():raise
-                    vision_model,advertised=choose_vision_model(endpoint,key,timeout)
-                    routing={'reason':'primary_model_does_not_accept_images','primary_http_status':400,
-                             'primary_model':model,'vision_model':vision_model,'advertised_models':advertised}
             if vision_model:
+                routing={'reason':'explicit_vision_model','primary_model':model,'vision_model':vision_model}
                 reviews,semantic_files,batches=visual_reviews(candidates,directory,endpoint,vision_model,key,timeout)
                 requests.extend(batches)
                 decision=api_decision(candidates,directory,top_k,focus,endpoint,model,key,timeout,reviews=reviews,audit=requests)
+            else:
+                # The caller controls model choice. A 400 from the primary
+                # model must not trigger a /models request or a model switch.
+                decision=api_decision(candidates,directory,top_k,focus,endpoint,model,key,timeout,audit=requests)
             validate_decision(decision,manifest,directory,top_k)
-        except (HTTPError,URLError,TimeoutError,ValueError,KeyError,TypeError,IndexError,OSError) as exc:
+        except (HTTPError,URLError,TimeoutError,HTTPException,ValueError,KeyError,TypeError,IndexError,OSError) as exc:
             decision=None
             # Exception bodies can contain remote data; record only a safe category.
             failure={'type':type(exc).__name__,'message':'语义排序请求失败或返回无效剪辑单，已按规则降级。'}
             if isinstance(exc,HTTPError):
                 failure['http_status']=exc.code
                 exc.close()
+            if isinstance(exc,TransportError):
+                reason=exc.reason if exc.reason in ('timeout','connection_error','io_error','http_error') else 'other'
+                failure.update(transport_error=reason,retryable=bool(exc.retryable))
+                if exc.http_status is not None:failure['http_status']=exc.http_status
+            elif isinstance(exc,TimeoutError):
+                failure['transport_error']='timeout'
+            elif isinstance(exc,(ConnectionError,HTTPException)) or (isinstance(exc,URLError) and not isinstance(exc,HTTPError)):
+                failure['transport_error']='connection_error'
             if isinstance(exc,ResponseContractError):
-                failure.update(response_contract=exc.reason,finish_reason=exc.finish_reason)
+                reason=exc.reason if exc.reason in ('invalid_json','invalid_response_envelope','response_too_large',
+                    'refused','incomplete_response') else 'other'
+                failure.update(response_contract=reason,finish_reason=exc.finish_reason)
     else:
         failure={'type':'disabled' if mode=='rules' else 'not_configured','message':'使用规则排序；未调用语义模型。'}
     if decision is None:
@@ -107,5 +123,6 @@ def rank(manifest,directory,top_k,focus,mode,endpoint,model,timeout=90,vision_mo
                            'reasons':r['exclusion_reasons'] or ['综合排序未进入本次入选名额']} for r in manifest['rallies'] if r['rally_id'] not in selected]
     path=Path(directory)/'edit_decision.json'; save_json(path,decision)
     save_json(Path(directory)/'ranking_log.json',{'mode':ranking_mode,'candidate_ids':[r['rally_id'] for r in candidates],
-              'fallback':failure,'routing':routing,'requests':requests,'max_frames_per_candidate':3,'uploaded_whole_video':False})
+              'fallback':failure,'routing':routing,'requests':requests,'max_frames_per_candidate':3,'uploaded_whole_video':False,
+              'requested_model':model,'requested_vision_model':vision_model,'model_policy':'explicit_models_only'})
     return str(path),[path,Path(directory)/'ranking_log.json']+semantic_files

@@ -65,11 +65,17 @@ class PipelineTests(unittest.TestCase):
                 self.assertNotIn('rule_score',json.dumps(info));self.assertNotIn('rule_score',payload['messages'][0]['content'])
                 frames=[r for r in info['evidence'] if r['kind']=='frame']
                 evidence=min(frames,key=lambda f:abs(f['start_sec']-3))
-                result=event()
-                result['observations'][0]['time_sec']=evidence['start_sec']
-                result['observations'][0]['evidence_ids']=[evidence['id']]
-                for value in result['dimensions'].values():
-                    if value['value'] is not None:value['evidence_ids']=[evidence['id']]
+                canonical=event()
+                from volleymole.event_schema import EVENT_FIELDS, FRAME_FIELDS
+                result={key:canonical[key] for key in EVENT_FIELDS}
+                for key in FRAME_FIELDS:
+                    when=canonical[key.replace('_frame','_sec')]
+                    result[key]=min(frames,key=lambda f:abs(f['start_sec']-when))['id']
+                result['facts']=[{'kind':'observation','text':canonical['observations'][0]['text'],
+                    'frame_id':evidence['id'],'support_id':None}]
+                result['dimensions']=[{'dimension':key,'value':score['value'],
+                    'fact_indexes':[] if score['value'] is None else [0]}
+                    for key,score in canonical['dimensions'].items()]
                 return {'events':[result]},{'model':'fake-av','usage':{},'finish_reason':'stop'}
             with patch.dict(os.environ,{'VOLLEYMOLE_API_KEY':'fake-test-key'}),patch('volleymole.semantic.request_json',side_effect=request):
                 timeline=Discovery(source,root,args).finish(manifest)
@@ -99,7 +105,7 @@ class PipelineTests(unittest.TestCase):
                     for path in paths.values():path.write_text('');artifacts.append(path)
                     pts=directory/'tracking/source_pts.csv';pts.write_text('0\n');artifacts.append(pts)
                     return {k:str(v) for k,v in paths.items()},artifacts
-                def build(*params):
+                def build(*params, **kwargs):
                     directory=params[5]
                     save_json(directory/'match_manifest.json',manifest)
                     return manifest,[directory/'match_manifest.json']

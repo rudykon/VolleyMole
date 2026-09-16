@@ -16,6 +16,7 @@ def settings_from(args):
         'key': os.getenv('VOLLEYMOLE_API_KEY') or os.getenv('OPENAI_API_KEY'),
         'timeout': args.api_timeout, 'retries': args.semantic_retries,
         'max_tokens':getattr(args,'semantic_max_tokens',4096),
+        'reasoning_effort':getattr(args,'semantic_reasoning_effort',None),
         'frame_width':getattr(args,'semantic_frame_width',None),
         'concurrency': args.semantic_concurrency, 'coarse_fps': args.coarse_fps,
         'review_fps': args.review_fps, 'modality': args.semantic_modality,
@@ -35,18 +36,34 @@ class Discovery:
         self.settings['action_evidence_sha256']=action_signature
         if frame_cache: self.settings['frame_cache'] = str(frame_cache)
         self.started = time.monotonic()
-        self.deadline = deadline if deadline is not None else self.started+args.analysis_timeout
+        self.budget_sec = args.analysis_timeout
+        self.review_reserved_sec = self.budget_sec*getattr(args, 'review_budget_fraction', .4)
+        self.coarse_budget_sec = self.budget_sec-self.review_reserved_sec
+        # Each source owns its budget. An explicit deadline is a caller's hard
+        # cap, not a shared match clock; normal run/match entries do not use it.
+        self.hard_deadline = deadline
+        self.coarse_deadline = min(self.started+self.coarse_budget_sec,
+                                   deadline if deadline is not None else float('inf'))
+        self.deadline = self.started+self.budget_sec
+        self.coarse_finished = None
         self.cache = Path(args.analysis_cache_dir)/'events' if not args.no_analysis_cache else self.directory/'event_cache'
         if args.no_analysis_cache:
             self.settings['fresh_run'] = time.time_ns()
         import threading
         self.cancelled = threading.Event()
         self.pool = ThreadPoolExecutor(max_workers=1)
-        self.future = self.pool.submit(self.discover)
+        self.future = self.pool.submit(self._discover)
+
+    def _discover(self):
+        try:
+            return self.discover()
+        finally:
+            self.coarse_finished = time.monotonic()
 
     def close(self):
         self.cancelled.set()
         self.deadline = time.monotonic()
+        self.coarse_deadline = self.deadline
         self.pool.shutdown(wait=True, cancel_futures=True)
 
     def discover(self):
@@ -56,7 +73,7 @@ class Discovery:
                 'audio_features': {'status': 'unknown', 'windows': []}, 'status': 'semantic_not_configured'}
         failures = []
         try:
-            audio, features = cached_audio(self.source, self.cache, self.deadline, self.args.no_analysis_cache)
+            audio, features = cached_audio(self.source, self.cache, self.coarse_deadline, self.args.no_analysis_cache)
         except (OSError, TimeoutError, __import__('subprocess').SubprocessError) as exc:
             audio = None; features = {'status': 'unknown', 'windows': []}
             failures.append({'job': 'audio', 'error': type(exc).__name__})
@@ -70,12 +87,18 @@ class Discovery:
         # soon as its local sound observations are available.
         import threading
         sound_lock = threading.Lock()
+        sounds_by_job = {}
         def process(job):
             nonlocal detector
             if self.cancelled.is_set(): raise TimeoutError('analysis cancelled')
             local = {**features, 'sound_events': []}
-            if self.args.sound_model and audio is not None and time.monotonic() < self.deadline:
-                with sound_lock:
+            if self.args.sound_model and audio is not None:
+                remaining = self.coarse_deadline-time.monotonic()
+                if remaining <= 0 or not sound_lock.acquire(timeout=remaining):
+                    raise TimeoutError('coarse sound deadline')
+                try:
+                    if self.cancelled.is_set() or time.monotonic() >= self.coarse_deadline:
+                        raise TimeoutError('coarse sound deadline')
                     import hashlib
                     key = hashlib.sha256(json.dumps({'source':self.source['identity'],'job':job,
                         'model':self.settings['audio_model'],'labels':self.settings['audio_labels'],
@@ -92,9 +115,14 @@ class Discovery:
                             if getattr(self.args,'sound_thresholds',None) else None)
                         local['sound_events'] = detector.detect(audio[round(job['start']*32000):round(job['end']*32000)], job['start'])
                         save_json(sound_path, local['sound_events'])
-            return understand_context(job, self.source, self.cache, self.settings, audio, local, self.deadline)
-        results, failed = bounded_map(jobs, process, self.settings['concurrency'], self.deadline, self.cancelled.is_set)
-        features['sound_events'] = [s for result in results for s in result['local']['sound_events']]
+                    sounds_by_job[job['id']] = local['sound_events']
+                finally:
+                    sound_lock.release()
+            return understand_context(job, self.source, self.cache, self.settings, audio, local, self.coarse_deadline)
+        results, failed = bounded_map(jobs, process, self.settings['concurrency'], self.coarse_deadline, self.cancelled.is_set)
+        # Local evidence survives an unrelated remote timeout and remains
+        # available to the reserved review phase.
+        features['sound_events'] = [s for key in sorted(sounds_by_job) for s in sounds_by_job[key]]
         completed = {r['job']['id'] for r in results}
         failures += failed
         failed_ids = {f['job'] for f in failures}
@@ -103,8 +131,23 @@ class Discovery:
             'status': 'partial' if failures else 'complete', 'total_chunks': len(jobs)}
 
     def finish(self, manifest):
-        try: discovered = self.future.result()
-        finally: self.pool.shutdown(wait=True)
+        try:
+            discovered = self.future.result()
+        except BaseException:
+            self.close()
+            raise
+        self.pool.shutdown(wait=True)
+        if self.cancelled.is_set(): raise RuntimeError('event analysis cancelled')
+        review_started = time.monotonic()
+        coarse_elapsed = max(0., self.coarse_finished-self.started)
+        # The local manifest may arrive much later than the coarse cutoff.
+        # Waiting for it cannot consume the reserved review window. Coarse
+        # slack is transferred, but an uninterruptible local overrun is audited.
+        review_budget = self.budget_sec-min(coarse_elapsed, self.coarse_budget_sec)
+        self.deadline = min(review_started+review_budget,
+                            self.hard_deadline if self.hard_deadline is not None else float('inf'))
+        print(f'[events] 粗读 {len(discovered["results"])}/{discovered.get("total_chunks", 0)}；'
+              f'复核预算 {max(0., self.deadline-review_started):.1f}s', flush=True)
         coarse = []
         for result in discovered['results']:
             for event in result['events']:
@@ -158,7 +201,7 @@ class Discovery:
         if discovered['status'] != 'semantic_not_configured':
             results, failures = bounded_map(jobs, lambda job: understand_context(job, self.source, self.cache,
                 self.settings, discovered['audio'], discovered['audio_features'], self.deadline, records),
-                self.settings['concurrency'], self.deadline)
+                self.settings['concurrency'], self.deadline, self.cancelled.is_set)
         reviewed_ids = {r['job']['id'] for r in results}
         # A successful empty review rejects its candidate; failures retain only
         # coarse evidence, explicitly marked as unreviewed.
@@ -173,21 +216,56 @@ class Discovery:
         failed_ids = {f['job'] for f in failures}
         failures += [{'job': j['id'], 'status': 'unreviewed', 'error': 'deadline_or_disabled'} for j in jobs
                      if j['id'] not in reviewed_ids|failed_ids]
+        finished = time.monotonic()
         report = {'schema_version': 1, 'source': self.source, 'events': timeline,
             'local_action_status':self.action_evidence['status'],
             'local_action_coverage':evidence_status(self.action_evidence),
             'local_action_candidates':len(self.action_evidence.get('events',[])),
             'coarse_status': discovered['status'], 'coarse_chunks': discovered.get('total_chunks', 0),
             'coarse_completed': len(discovered['results']), 'review_completed': len(results),
+            'review_candidates': len(jobs)+len(oversized),
             'failures': discovered['failures']+failures+oversized,
-            'budget_sec': self.args.analysis_timeout, 'elapsed_sec': time.monotonic()-self.started,
-            'deadline_reached': time.monotonic() >= self.deadline,
+            'budget_sec': self.budget_sec, 'budget_scope': 'per_source', 'elapsed_sec': finished-self.started,
+            'deadline_reached': finished >= self.deadline,
+            'phase_timing': {'coarse_budget_sec': self.coarse_budget_sec,
+                'coarse_elapsed_sec': coarse_elapsed,
+                'coarse_deadline_reached': self.coarse_finished >= self.coarse_deadline,
+                'coarse_overrun_sec': max(0., coarse_elapsed-self.coarse_budget_sec),
+                'local_manifest_wait_sec': max(0., review_started-self.coarse_finished),
+                'review_reserved_sec': self.review_reserved_sec,
+                'review_budget_sec': max(0., self.deadline-review_started),
+                'review_elapsed_sec': finished-review_started,
+                'review_deadline_reached': finished >= self.deadline},
             'evidence_policy': 'Explicit PTS video frames and synchronized audio; model prose is not independent evidence.',
-            'requests': [{k: r[k] for k in ('signature', 'job', 'requested_fps', 'sample_times_sec', 'request', 'cached', 'elapsed_sec')}
+            'requests': [{k: r[k] for k in ('signature', 'job', 'requested_fps', 'sample_times_sec', 'request',
+                         'cached', 'elapsed_sec', 'attempts', 'retry_history', 'wire_protocol') if k in r}
                 for r in discovered['results']+results]}
+        report['analysis_status'] = analysis_summary(report)['status']
+        print(f'[events] {report["analysis_status"]}；复核 {len(results)}/{report["review_candidates"]}；'
+              f'有效事件 {len(timeline)}；失败/未完成 {len(report["failures"])}', flush=True)
         save_json(self.directory/'event_timeline.json', report)
         save_json(self.directory/'audio_events.json', discovered['audio_features'])
         return report
+
+
+def analysis_summary(timeline):
+    """Keep incomplete understanding distinguishable from a verified empty match."""
+    sources = timeline.get('sets', [timeline])
+    complete = all(s.get('coarse_status') == 'complete' and not s.get('failures')
+                   and s.get('coarse_completed', 0) == s.get('coarse_chunks', s.get('coarse_completed', 0))
+                   and s.get('review_completed', 0) == s.get('review_candidates', s.get('review_completed', 0))
+                   for s in sources)
+    coarse = sum(s.get('coarse_completed', 0) for s in sources)
+    reviewed = sum(s.get('review_completed', 0) for s in sources)
+    status = 'complete' if complete and sources else 'partial' if coarse+reviewed else 'failed'
+    if sources and all(s.get('coarse_status') == 'semantic_not_configured' for s in sources):
+        status = 'not_configured'
+    return {'status': status, 'source_count': len(sources),
+        'coarse_chunks': sum(s.get('coarse_chunks', 0) for s in sources),
+        'coarse_completed': coarse,
+        'review_candidates': sum(s.get('review_candidates', s.get('review_completed', 0)) for s in sources),
+        'review_completed': reviewed, 'event_count': len(timeline.get('events', [])),
+        'failure_count': sum(len(s.get('failures', [])) for s in sources)}
 
 
 def collection_artifacts(manifest, timeline, directory, collection, top_k):
@@ -208,10 +286,14 @@ def collection_artifacts(manifest, timeline, directory, collection, top_k):
     selected = select_events(candidates, collection, 5 if collection == 'bloopers' else top_k,
         manifest['config'].get('event_weights', WEIGHTS)[collection], manifest['config'].get('event_score_threshold', 55))
     requested = 5 if collection == 'bloopers' else top_k
+    analysis = analysis_summary(timeline)
+    shortage = f'符合证据和完整性要求的素材只有 {len(selected)} 段，未凑数。' if len(selected) < requested else None
+    if shortage and analysis['status'] != 'complete':
+        shortage = '事件分析未完成；当前有效证据仅支持 %d 段，不能据此判断整场素材不足。' % len(selected)
     result = {'title': f'比赛{len(selected)}佳球' if collection == 'highlights' else f'排球趣味时刻（{len(selected)}段）',
         'selected': [], 'collection': collection, 'clip_protocol': 'rally_v1' if collection == 'highlights' else 'event_v1',
         'ranking_mode': 'event_dimensions', 'requested_count': requested, 'actual_count': len(selected),
-        'shortage_reason': f'符合证据和完整性要求的素材只有 {len(selected)} 段，未凑数。' if len(selected) < requested else None,
+        'shortage_reason': shortage, 'analysis_status': analysis['status'],
         'review_status': {}, 'scores': {}}
     target_manifest = {**manifest, 'rallies': []}
     for rank, (event, scores) in enumerate(selected, 1):
@@ -257,12 +339,14 @@ def complete_collections(args, manifest, timeline, directory):
     from .run_match import verify
     directory = Path(directory)
     manifest = {**manifest, '_directory': str(directory)}
+    analysis = analysis_summary(timeline)
     reports = []
     for collection in (('highlights', 'bloopers') if args.collection == 'both' else (args.collection,)):
         target = directory/'collections'/collection
         decision = collection_artifacts(manifest, timeline, target, collection, args.top_k)
         report = {'collection': collection, 'directory': str(target), 'actual_count': decision['actual_count'],
-            'requested_count': decision['requested_count'], 'shortage_reason': decision['shortage_reason'], 'output': None}
+            'requested_count': decision['requested_count'], 'shortage_reason': decision['shortage_reason'], 'output': None,
+            'analysis_status': analysis['status']}
         if decision['selected'] and args.stop_after != 'rank':
             from .common import Stages, identity
             stages = Stages(target)
@@ -288,5 +372,5 @@ def complete_collections(args, manifest, timeline, directory):
             report['stages'] = stages.current_run
         reports.append(report)
         print(f'{collection}：入选 {decision["actual_count"]}/{decision["requested_count"]}；{report["output"] or target}', flush=True)
-    save_json(directory/'collections_report.json', {'collections': reports})
+    save_json(directory/'collections_report.json', {'analysis': analysis, 'collections': reports})
     return reports

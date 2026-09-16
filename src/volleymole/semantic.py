@@ -11,6 +11,8 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 from .common import APP, digest, read_json, save_json
 from .schemas import local_file
+from .llm_transport import (ResponseContractError, TransportError,
+                            is_retryable_transport_error, request_json as transport_request_json)
 
 REVIEW_FIELDS = {
     'rally_id': {'type': 'string'},
@@ -25,42 +27,37 @@ REVIEW_SCHEMA = {'type': 'object', 'additionalProperties': False,
     'required': ['reviews']}
 
 
-class ResponseContractError(ValueError):
-    """Safe diagnostics without retaining remote response bodies or credentials."""
-    def __init__(self, reason, finish_reason=None):
-        super().__init__(reason)
-        self.reason = reason
-        self.finish_reason = finish_reason if finish_reason in ('stop','length','content_filter','tool_calls',None) else 'other'
+class EventContractError(ResponseContractError):
+    """Rejected event data, with safe wire-contract diagnostics but no body."""
+    def __init__(self, validation_error, metadata):
+        super().__init__('invalid_event_contract', metadata.get('finish_reason'))
+        self.validation_error = validation_error
+        self.request_metadata = {k: metadata[k] for k in
+            ('response_format', 'structured_output_degraded', 'response_schema_sha256', 'reasoning_effort',
+             'gateway_json_repaired', 'response_content_encoding')
+            if k in metadata}
 
 
 def request_json(endpoint, key, payload, timeout):
-    deadline = time.monotonic()+timeout
-    request = Request(endpoint.rstrip('/')+'/chat/completions', data=json.dumps(payload).encode(),
-                      headers={'Authorization': 'Bearer '+key, 'Content-Type': 'application/json'})
-    with urlopen(request, timeout=timeout) as response:
-        chunks, size = [], 0
-        while True:
-            remaining = deadline-time.monotonic()
-            if remaining <= 0: raise TimeoutError('semantic response deadline')
-            sock = getattr(getattr(getattr(response, 'fp', None), 'raw', None), '_sock', None)
-            if sock is not None: sock.settimeout(remaining)
-            chunk = response.read1(65536)
-            if not chunk: break
-            size += len(chunk)
-            if size > 16*1024*1024: raise ResponseContractError('response_too_large')
-            chunks.append(chunk)
-        data = json.loads(b''.join(chunks))
-    choice = data['choices'][0]
-    if choice['message'].get('refusal'):
-        raise ResponseContractError('refused',choice.get('finish_reason'))
-    if choice.get('finish_reason') != 'stop':
-        raise ResponseContractError('incomplete_response',choice.get('finish_reason'))
-    try:
-        parsed = json.loads(choice['message']['content'])
-    except (json.JSONDecodeError,TypeError):
-        raise ResponseContractError('invalid_json','stop') from None
-    return parsed, {
-        'model': payload['model'], 'finish_reason': choice['finish_reason'], 'usage': data.get('usage')}
+    # Preserve legacy HTTP classification in ranker/api_probe; event failures
+    # redact it at the bounded-map boundary. Keep urlopen injectable for tests.
+    return transport_request_json(endpoint, key, payload, timeout, opener=urlopen,
+                                  preserve_http_error=True)
+
+
+def failure_diagnostics(exc):
+    """Persist only allowlisted diagnostics, never arbitrary exception text."""
+    from urllib.error import HTTPError
+    failure = {'error': type(exc).__name__}
+    if isinstance(exc, HTTPError): failure['http_status'] = exc.code
+    if isinstance(exc, TransportError):
+        failure['transport_error'] = exc.reason
+        if exc.http_status is not None: failure['http_status'] = exc.http_status
+    if isinstance(exc, ResponseContractError):
+        failure.update(response_contract=exc.reason, finish_reason=exc.finish_reason)
+    if isinstance(exc, EventContractError):
+        failure.update(validation_error=exc.validation_error, request=exc.request_metadata)
+    return failure
 
 
 def candidate_fields(rally, full_evidence=False):
@@ -243,7 +240,7 @@ def sampled_evidence(source, start, end, fps, width=512, audio=None, deadline=No
 
 
 def bounded_map(jobs, function, concurrency, deadline, stopped=None):
-    """Bound queue depth as well as running work; request timeout includes upload.
+    """Bound queue depth as well as running work using a shared phase deadline.
 
     Workers receive the same absolute deadline. Never abandon workers writing
     caches behind the caller; each completes or times out before pool shutdown.
@@ -265,9 +262,10 @@ def bounded_map(jobs, function, concurrency, deadline, stopped=None):
                 except Exception as exc:
                     # Do not persist provider bodies or secrets in error messages.
                     from urllib.error import HTTPError
-                    failure = {'job': job['id'], 'status': 'unreviewed', 'error': type(exc).__name__}
-                    if isinstance(exc, HTTPError): failure['http_status'] = exc.code; exc.close()
-                    if isinstance(exc, ResponseContractError): failure['response_contract'] = exc.reason
+                    failure = {'job': job['id'], 'status': 'unreviewed', **failure_diagnostics(exc)}
+                    if isinstance(exc, HTTPError): exc.close()
+                    if hasattr(exc, 'attempts'): failure['attempts'] = exc.attempts
+                    if hasattr(exc, 'retry_history'): failure['retry_history'] = exc.retry_history
                     failures.append(failure)
             if time.monotonic() >= deadline or (stopped and stopped()): exhausted = True
     return results, failures
@@ -295,7 +293,7 @@ def _understand_context(job, source, cache, settings, audio, audio_features, dea
     prompt = (APP/'prompts/understand_events.md').read_text(encoding='utf-8')
     signature_data = {'version': 1, 'source': source['identity'], 'job': job,
         'settings': {k: v for k, v in settings.items() if k not in ('key','frame_cache')}, 'prompt': prompt,
-        'implementation': [digest(APP/name) for name in ('semantic.py', 'events.py', 'audio_events.py', 'motion_features.py', 'event_frames.py','action_evidence.py')],
+        'implementation': [digest(APP/name) for name in ('semantic.py', 'llm_transport.py', 'events.py', 'event_schema.py', 'audio_events.py', 'motion_features.py', 'event_frames.py','action_evidence.py')],
         'local_signature': settings.get('local_signature') if records is not None else None}
     signature = hashlib.sha256(json.dumps(signature_data, sort_keys=True).encode()).hexdigest()
     path = Path(cache)/f'{signature}.json'
@@ -353,29 +351,63 @@ def _understand_context(job, source, cache, settings, audio, audio_features, dea
     content.insert(0, {'type': 'text', 'text': json.dumps({'phase': job['phase'], 'context': [job['start'], job['end']],
         'requested_fps': fps, 'actual_sample_times': [t for t, _ in frames], 'local': local,
         'candidate': job.get('candidate'), 'evidence': evidence}, ensure_ascii=False)})
-    payload = {'model': settings['model'], 'max_tokens': settings.get('max_tokens',4096),
-        'messages': [{'role': 'system', 'content': prompt}, {'role': 'user', 'content': content}],
-        'response_format': {'type': 'json_object'}}
+    from .event_schema import event_request_payload, decode_event_response, WIRE_PROTOCOL
+    payload = event_request_payload(settings['model'], prompt, content, evidence, job['start'], job['end'],
+        settings.get('max_tokens', 4096), settings.get('reasoning_effort'))
     began = time.monotonic()
+    original_messages = payload['messages']
+    retry_history = []
     for attempt in range(settings['retries']+1):
         remaining = deadline-time.monotonic()
-        if remaining <= 0: raise TimeoutError('analysis deadline')
+        if remaining <= 0:
+            exc = TimeoutError('analysis deadline')
+            exc.attempts, exc.retry_history = attempt, retry_history
+            raise exc
+        data = None
         try:
             data, metadata = request_json(settings['endpoint'], settings['key'], payload, min(settings['timeout'], remaining))
-            events = validate_events(data, evidence, job['start'], job['end'])
+            try:
+                events = decode_event_response(data, evidence, job['start'], job['end'])['events']
+            except (ValueError, TypeError, KeyError) as exc:
+                # Anchor compilation never fills in missing facts/scores or
+                # accepts invalid data, even after a gateway schema downgrade.
+                reason = str(exc) if type(exc) is ValueError else 'invalid_event_shape'
+                raise EventContractError(reason, metadata) from None
             break
         except Exception as exc:
-            from urllib.error import HTTPError, URLError
-            retryable = isinstance(exc, (TimeoutError, URLError))
-            if isinstance(exc, HTTPError):
-                retryable = exc.code == 429 or exc.code >= 500
-                exc.close()
-            if not retryable or attempt == settings['retries']: raise
+            from urllib.error import HTTPError
+            retryable = is_retryable_transport_error(exc)
+            contract_retry = isinstance(exc, EventContractError) or (
+                isinstance(exc, ResponseContractError) and (exc.reason in ('invalid_json', 'invalid_response_envelope')
+                or (exc.reason == 'incomplete_response' and exc.finish_reason == 'length')))
+            retry_history.append({'attempt': attempt+1, **failure_diagnostics(exc)})
+            exc.attempts, exc.retry_history = attempt+1, list(retry_history)
+            if isinstance(exc, HTTPError): exc.close()
+            if not (retryable or contract_retry) or attempt == settings['retries']: raise
+            if contract_retry:
+                messages = list(original_messages)
+                if data is not None:
+                    prior = json.dumps(data, ensure_ascii=False)
+                    if len(prior) <= 32000: messages.append({'role': 'assistant', 'content': prior})
+                detail = exc.validation_error if isinstance(exc, EventContractError) else exc.reason
+                messages.append({'role': 'user', 'content':
+                    '上一响应未通过本地校验：'+detail+'。请根据同一批原始证据重新输出完整的 '+WIRE_PROTOCOL+' JSON。'
+                    '事实 frame_id 选已有画面，support_id 仅选该帧附近的辅助证据或 null；'
+                    '评分 fact_indexes 是本事件 facts 数组中从 0 开始的索引。'
+                    'dimensions 每项必须有 dimension、value、fact_indexes 三个字段，九个维度名各出现一次，不能只给无名分数数组。'
+                    '不得为通过校验编造事实、修改实际观察或把无效事件机械改为空数组。'})
+                payload = {**payload, 'messages': messages}
+                if exc.finish_reason == 'length':
+                    payload['max_tokens'] = min(16384, payload['max_tokens']*2)
             # Finite jitter-free backoff, bounded by the absolute deadline.
             delay = min(2**attempt, max(0, deadline-time.monotonic()))
             time.sleep(delay)
     result = {'signature': signature, 'job': job, 'events': events, 'evidence': evidence,
         'local': local, 'request': metadata, 'attempts': attempt+1, 'elapsed_sec': time.monotonic()-began,
+        'wire_protocol': WIRE_PROTOCOL, 'wire_response': data, 'retry_history': retry_history,
+        'dimension_encodings': ['named_entries' if isinstance(e['dimensions'], list) else 'named_object'
+                                for e in data['events']],
+        'time_derivation': 'exact frame PTS; clip envelope includes explicit anchors and cited fact frames',
         'requested_fps': fps, 'sample_times_sec': [t for t, _ in frames], 'cached': False}
     save_json(path, result)
     return result

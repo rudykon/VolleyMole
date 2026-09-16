@@ -48,24 +48,34 @@ jobs:
             test_action_evidence_pipeline \
             test_action_spotting \
             test_analysis_cache \
+            test_analysis_routing \
             test_audio_detector \
             test_auto_blooper_annotations \
             test_blooper_benchmark \
+            test_event_budgets \
             test_event_pipeline \
+            test_event_schema \
+            test_event_wire \
             test_events \
             test_gpu_stages \
             test_integration_core.RegistryTests \
             test_integration_core.PacketTests \
             test_integration_core.JerseyTests \
+            test_llm_transport \
             test_match_collection \
             test_performance \
             test_pipeline \
+            test_probe_event_models \
             test_public_audio_eval \
             test_quality \
             test_rallies \
+            test_rally_recovery \
+            test_ranker_recovery \
             test_rally_evidence \
+            test_replay_event_failures \
             test_semantic \
             test_semantic_request_limits \
+            test_semantic_retries \
             test_shared \
             test_sound_calibration \
             test_sound_configuration \
