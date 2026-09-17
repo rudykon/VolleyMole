@@ -2,14 +2,15 @@
 from pathlib import Path
 import subprocess
 from .common import APP, ROOT, digest, read_json, save_json
+from .assets import asset_root
 from .art_themes import get_theme
 from .title_templates import get_template, template_assets, words
 from .font_support import font_assets, load_font, normalize_text, text_units
 
-ART_ROOT=APP/'assets/illustrated'
-TITLE_FONT=APP/'assets/fonts/ZCOOLKuaiLe-Regular.ttf'
-LOGO_SOURCE=APP/'assets/branding/volleymole.svg'
-LOGO_PNG=APP/'assets/branding/volleymole.png'
+ART_ROOT=asset_root()/'illustrated'
+TITLE_FONT=asset_root()/'fonts/ZCOOLKuaiLe-Regular.ttf'
+LOGO_SOURCE=asset_root()/'branding/volleymole.svg'
+LOGO_PNG=asset_root()/'branding/volleymole.png'
 ART_NAMES=('volley_ball','volley_save','volley_set','volley_dive','volley_receive','volley_spike','rank_ribbon')
 INK=(13,22,40)
 CREAM=(255,246,223)
@@ -27,6 +28,8 @@ def asset_paths(art_theme='default',title_template='legacy',transition_style='fa
 
 def prepare_brand():
     """Use the exact SVG; invalidate its derived PNG when the source changes."""
+    if not LOGO_SOURCE.is_file():
+        raise FileNotFoundError('缺失品牌素材；请运行 volleymole assets fetch')
     metadata=LOGO_PNG.with_suffix('.json')
     signature={'source_sha256':digest(LOGO_SOURCE),'renderer_sha256':digest(APP/'rasterize_logo.py')}
     previous=read_json(metadata) if metadata.is_file() else {}

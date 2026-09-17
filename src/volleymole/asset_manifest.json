@@ -1,0 +1,275 @@
+{
+  "schema_version": 1,
+  "version": "assets-v1",
+  "archive": {
+    "url": "https://github.com/rudykon/VolleyMole/releases/download/assets-v1/volleymole-assets-v1.zip",
+    "bytes": 94340439,
+    "sha256": "ffb9b89962cf793c389f10d1ccfdd7da84121294445c524a83ce63ba18af6aeb"
+  },
+  "files": {
+    "README.md": {
+      "bytes": 6443,
+      "sha256": "b7fdef7b217da6f8b459cc009bcb44a9d75cee5d2a92b4207a27abc01f4d4cda"
+    },
+    "branding/volleymole.json": {
+      "bytes": 263,
+      "sha256": "03d2feb454a1d7cdd3f7634aa2081c98c452f551573cb746311fb102814dfc06"
+    },
+    "branding/volleymole.png": {
+      "bytes": 160059,
+      "sha256": "c2eae8d4ec8a4431e9faad3182775ad10a2a26ad2244dc0b56bf5127ef2a90e3"
+    },
+    "branding/volleymole.svg": {
+      "bytes": 54642,
+      "sha256": "cba27b0e0352b40e6863956a39cd1578d370ed7b8cb37e6aeb04b254982f3f2a"
+    },
+    "design_suites/aurora-ball.png": {
+      "bytes": 2178830,
+      "sha256": "d3941b3f4effffa15a671dcfa553f11a0c874dbc0b11beb1a71287f0b88865f5"
+    },
+    "design_suites/prompts.json": {
+      "bytes": 1593,
+      "sha256": "348364ee01a813b8e3c21d7b09a3a617eef097ed44d8ba33053d30249ec8d3ab"
+    },
+    "fonts/NOTICE-Noto-CJK.txt": {
+      "bytes": 14712,
+      "sha256": "849f4ea9c214fa4ac3593b770c699f387534b11ce671264c1b10d85bdcb5997b"
+    },
+    "fonts/NOTICE-Noto-Core.txt": {
+      "bytes": 5208,
+      "sha256": "075f91382875da1c4b491f1facf2586f55448705133264d98ce15cab6211b125"
+    },
+    "fonts/NotoSans-Bold.ttf": {
+      "bytes": 515752,
+      "sha256": "e83493c945848ecd4a9ad0f6d19164541a0d3e23a9c952304a00a46e00272ac5"
+    },
+    "fonts/NotoSans-BoldItalic.ttf": {
+      "bytes": 534180,
+      "sha256": "4315b26e5afb62f70f5ffe0edaa3363e57765ff2af2beda12b6fef197e3e5f5a"
+    },
+    "fonts/NotoSansCJKsc-Bold.otf": {
+      "bytes": 17002224,
+      "sha256": "f85c246ccd02f66c6d1e073e8c6741ac02fc84bf97f9738cd13131895629d3f6"
+    },
+    "fonts/NotoSerif-Regular.ttf": {
+      "bytes": 588876,
+      "sha256": "9d7583b7dc9e812afd32a14280c5cac3160012efe50c8d08938f4fea266ff67f"
+    },
+    "fonts/NotoSerifCJKsc-Regular.otf": {
+      "bytes": 24425908,
+      "sha256": "76ca1852f66609021664280dfbd4deb2916f7691eb2dec811889813d1b6129d4"
+    },
+    "fonts/OFL-ZCOOLKuaiLe.txt": {
+      "bytes": 4398,
+      "sha256": "538078469839b4a2e7ad22bef4ebe41681a4e53749bb2a072144024f1d6d703d"
+    },
+    "fonts/ZCOOLKuaiLe-Regular.ttf": {
+      "bytes": 1514968,
+      "sha256": "812a6fc1fe54b6d73a419245c32dfeba8aa33104d5be90d1cf6af082007cb71d"
+    },
+    "illustrated/prompts-ranked.json": {
+      "bytes": 5391,
+      "sha256": "3f831c87ef73ace17b69981519648180e98d55142c7978483014f9d335b67141"
+    },
+    "illustrated/prompts.json": {
+      "bytes": 3890,
+      "sha256": "857de99949ac1c445a0fb9a4868812525d2293e9463efe08a527b4d9a118092d"
+    },
+    "illustrated/rank_ribbon.png": {
+      "bytes": 999429,
+      "sha256": "1936da8ed519f98cc8e34ac42ea3c10e7a876e123c20fe0b40e4bbbc92af960f"
+    },
+    "illustrated/themes/clay/rank_ribbon.png": {
+      "bytes": 1192694,
+      "sha256": "704085b0d73a70090c02ff881adfdb71256968e88a0fcec42e6cc369f2bd9874"
+    },
+    "illustrated/themes/clay/volley_ball.png": {
+      "bytes": 886644,
+      "sha256": "ca567d7817498eca1739baa646e76a3b728eedc427cee2a922222920d3aab0ea"
+    },
+    "illustrated/themes/clay/volley_dive.png": {
+      "bytes": 843599,
+      "sha256": "dfd404529be07f7c35a5f6ce4e2bcb013626fcf113792ca97c52f94f5ab21865"
+    },
+    "illustrated/themes/clay/volley_receive.png": {
+      "bytes": 832684,
+      "sha256": "ac225b2910444a5cd01f49465e9facfae868e78f2a17dd4f58a832dd967c91f2"
+    },
+    "illustrated/themes/clay/volley_save.png": {
+      "bytes": 1058508,
+      "sha256": "623a6ca28c475e8d88755c49d64c6a86ccf84b99475e566fc8c23cda2af8719c"
+    },
+    "illustrated/themes/clay/volley_set.png": {
+      "bytes": 624542,
+      "sha256": "e870e135785d5202ad9b54f908cfcb840f725bfcae840f9cebb0d7acb9a4e333"
+    },
+    "illustrated/themes/clay/volley_spike.png": {
+      "bytes": 757383,
+      "sha256": "0d5479828c056740caa3f681a2ea69066734bdb523b6bfe138bc3ad7a06ad104"
+    },
+    "illustrated/themes/ink/rank_ribbon.png": {
+      "bytes": 1533731,
+      "sha256": "929c8255a65c8acc409d679bcba3b71fcc61514474f0a807b5faa7055733c65b"
+    },
+    "illustrated/themes/ink/volley_ball.png": {
+      "bytes": 1392699,
+      "sha256": "50de9adaa6ca794d0ed39d16fc9a33eb793b0743592c29d48b9cd9cab147203c"
+    },
+    "illustrated/themes/ink/volley_dive.png": {
+      "bytes": 1080649,
+      "sha256": "c7f768eb9905641e498fc535b6e4143b99f6fcb42ecb726db1a16d6b2f9277cf"
+    },
+    "illustrated/themes/ink/volley_receive.png": {
+      "bytes": 1097519,
+      "sha256": "029948cbbb7acf1ab02eb3bf331f84f586a10a5303ae6c6cd869f75b6f788c02"
+    },
+    "illustrated/themes/ink/volley_save.png": {
+      "bytes": 1394777,
+      "sha256": "6745c65b41f2523dcb6b7e7320c63734bfd164c7cc7ead89966e92e57db18a91"
+    },
+    "illustrated/themes/ink/volley_set.png": {
+      "bytes": 724969,
+      "sha256": "3e32dabf32dcd1b7b57d45fdfef7ac2d370291748db6e25d1f4fcfc0c453c969"
+    },
+    "illustrated/themes/ink/volley_spike.png": {
+      "bytes": 978128,
+      "sha256": "f54941def45c32d151f90e33f5ef9ae6c9259d707e9ae0ad2f3198c069a9a48a"
+    },
+    "illustrated/themes/manga/rank_ribbon.png": {
+      "bytes": 1023361,
+      "sha256": "f75cda8910b27f3e7fbd4dc70be2b4ebf5a211dbd28ef1f24cf7c7d2af71de77"
+    },
+    "illustrated/themes/manga/volley_ball.png": {
+      "bytes": 1296924,
+      "sha256": "c288d4f48820116eaff25199ef8856946587d923a90172e32da89812b5f51e49"
+    },
+    "illustrated/themes/manga/volley_dive.png": {
+      "bytes": 779775,
+      "sha256": "cbd909c2639518a75581be9ebab9f2bed101998f69254c0393afbcd198666caf"
+    },
+    "illustrated/themes/manga/volley_receive.png": {
+      "bytes": 963473,
+      "sha256": "7037c4403bd076301c98c33d76ee1b7a32e21439cb08e1371547727ff04f5d9c"
+    },
+    "illustrated/themes/manga/volley_save.png": {
+      "bytes": 1204402,
+      "sha256": "88347e9a163d1414d2fc779259261c31db3702dec7af26a43e6cae855201e47a"
+    },
+    "illustrated/themes/manga/volley_set.png": {
+      "bytes": 695991,
+      "sha256": "160c00c8da1829e675a04d3bb0010cf86d67d97977a3e156d45c921b9f60e6bd"
+    },
+    "illustrated/themes/manga/volley_spike.png": {
+      "bytes": 739391,
+      "sha256": "4b14be523b7db46d6a04fdbfb9346386de96f3087966e0cb61eabea114db3e3a"
+    },
+    "illustrated/themes/papercut/rank_ribbon.png": {
+      "bytes": 1219553,
+      "sha256": "47d67db9801c5b05dc053ff487b6848dccb8115538b3b085ad212a5899c04347"
+    },
+    "illustrated/themes/papercut/volley_ball.png": {
+      "bytes": 1156499,
+      "sha256": "09100760ba831d68e4940f7c69d827e8c1829698f9fa3e401895eff0dd0dd3b6"
+    },
+    "illustrated/themes/papercut/volley_dive.png": {
+      "bytes": 711292,
+      "sha256": "deb2552dea8d41b571db9d7d4f8ea5527e15da8e51cf7987873b66a3e32bb45a"
+    },
+    "illustrated/themes/papercut/volley_receive.png": {
+      "bytes": 831008,
+      "sha256": "c686ebb55cfb563c7cace96789e3eb979f0e09a6c1ac481d07955410459851c9"
+    },
+    "illustrated/themes/papercut/volley_save.png": {
+      "bytes": 1179428,
+      "sha256": "43d107bbdf1995ef9ca6c5f284fd4322ea306f12c8e20010960d784aa53cf298"
+    },
+    "illustrated/themes/papercut/volley_set.png": {
+      "bytes": 610611,
+      "sha256": "75a8d83ee3ffa8bba9c78a8f2ddf3cc0388bebb46a2735d5d5414dcb6b3b8922"
+    },
+    "illustrated/themes/papercut/volley_spike.png": {
+      "bytes": 680619,
+      "sha256": "d640491013b7c11dcfce7bbd21eb0dd2be44de2b9cab5ca00e39466e421c29f4"
+    },
+    "illustrated/themes/prompts.json": {
+      "bytes": 59540,
+      "sha256": "7317713a686df7cf44493b4c258a6ca3456081d7c8036f962d3e75bb4eeb1aa7"
+    },
+    "illustrated/themes/retro/rank_ribbon.png": {
+      "bytes": 1586999,
+      "sha256": "31d9ef9717b552f221671992648dfa93f252786bfe538654737df7d9abd7425a"
+    },
+    "illustrated/themes/retro/volley_ball.png": {
+      "bytes": 1466748,
+      "sha256": "3268d5858f7f9778fe5069db8b25ff1eb5b2d2ae19b2a8719a276fb52eeac736"
+    },
+    "illustrated/themes/retro/volley_dive.png": {
+      "bytes": 951763,
+      "sha256": "e21b008b3a34ea83763549700977837bfd628700c7c2c29741b3f0e3f8926ad4"
+    },
+    "illustrated/themes/retro/volley_receive.png": {
+      "bytes": 1063999,
+      "sha256": "5602f12e791993731bcc44d66fb333d5868ec68ab40891a70dee90c77cbb802a"
+    },
+    "illustrated/themes/retro/volley_save.png": {
+      "bytes": 1284805,
+      "sha256": "1203e072f34a526dd7fc03afbe7cf8223728b3d4b7fbadd300e06a14d73babbd"
+    },
+    "illustrated/themes/retro/volley_set.png": {
+      "bytes": 691625,
+      "sha256": "4a9ca73e6fded9d904fdc8002c8e70ee93e1a6733d08a2581798d5d2388ea923"
+    },
+    "illustrated/themes/retro/volley_spike.png": {
+      "bytes": 872834,
+      "sha256": "7b8e416cc2f875293a5135359aaff89273f5c7bf0ad677c85670eeaab9b98742"
+    },
+    "illustrated/volley_ball.png": {
+      "bytes": 1418382,
+      "sha256": "2e917fd4a910b765b04d165337d98c53fb66368e0b83afd863953c5863cb5cf4"
+    },
+    "illustrated/volley_dive.png": {
+      "bytes": 1097196,
+      "sha256": "6c9a875c9617566b2efa53ca5ce452d2be4f06c42740726d3ceb1a3847876310"
+    },
+    "illustrated/volley_receive.png": {
+      "bytes": 1083353,
+      "sha256": "eadd57870f07eb08d1757edc15a87e27c7a4b9dda1435e0cb3ebc3aeeac08d85"
+    },
+    "illustrated/volley_save.png": {
+      "bytes": 1348480,
+      "sha256": "cbd890d384811c05d3c774b3cc2e4e22eb82b3f10a8cd1ce8e729ab5de931e0d"
+    },
+    "illustrated/volley_set.png": {
+      "bytes": 808170,
+      "sha256": "3469e8f388326d31eeda928eaf28c53999aee378da883f75d47ce1dc6d298d26"
+    },
+    "illustrated/volley_spike.png": {
+      "bytes": 1168754,
+      "sha256": "d088030dbc056ccf36445ff0a0286023f91f90bdd69c85b9b277e647debc5215"
+    },
+    "transitions/film.png": {
+      "bytes": 2247546,
+      "sha256": "03e2ed59e1659da2be8b67249e10fbba0dd8c8eef256932c15a4e54329be1a01"
+    },
+    "transitions/ink.png": {
+      "bytes": 3151902,
+      "sha256": "ff5cbf094451897a32f6aebc072bdd15308620c36c8bced283c6d90e41f440fb"
+    },
+    "transitions/paper.png": {
+      "bytes": 2677838,
+      "sha256": "abdec3457eb54476bc44daaa481d2b84c8b586f0b964d98a7ce0f8f899b2b1b8"
+    },
+    "transitions/prism.png": {
+      "bytes": 2082255,
+      "sha256": "f5f7b7853d3ba4c735a39d83a7aa94f1e049af534caf38bd9ae14b9e008558f5"
+    },
+    "transitions/prompts.json": {
+      "bytes": 6863,
+      "sha256": "87b2b4ff0f5c93aafb7dae9ec500b6215e3c63ad2025ef3590f3a2755aeb87e7"
+    },
+    "transitions/velocity.png": {
+      "bytes": 3271555,
+      "sha256": "adf27a2a2ffc61b253b0ab15403a6d715189732c8275ddea83f39f3124f2c512"
+    }
+  }
+}

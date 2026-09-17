@@ -1,7 +1,7 @@
 """Built-in illustration palettes. Selection is explicit, never process-global."""
 from dataclasses import dataclass
 from pathlib import Path
-from .common import APP
+from .assets import asset_root
 
 
 @dataclass(frozen=True)
@@ -14,7 +14,7 @@ class ArtTheme:
 
     @property
     def root(self) -> Path:
-        base = APP / 'assets/illustrated'
+        base = asset_root() / 'illustrated'
         return base if self.name == 'default' else base / 'themes' / self.name
 
 

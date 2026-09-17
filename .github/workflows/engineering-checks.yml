@@ -49,6 +49,7 @@ jobs:
             test_action_spotting \
             test_analysis_cache \
             test_analysis_routing \
+            test_assets \
             test_audio_detector \
             test_auto_blooper_annotations \
             test_blooper_benchmark \
@@ -62,6 +63,7 @@ jobs:
             test_integration_core.RegistryTests \
             test_integration_core.PacketTests \
             test_integration_core.JerseyTests \
+            test_integration_core.PackagingTests \
             test_llm_transport \
             test_match_collection \
             test_performance \

@@ -1,9 +1,10 @@
 """Ten bilingual, code-native title systems; source artwork remains untouched."""
 from dataclasses import dataclass
 from .common import APP
+from .assets import asset_root
 from .font_support import load_font, font_assets, normalize_text, text_units
 
-FONTS=APP/'assets/fonts'
+FONTS=asset_root()/'fonts'
 STYLES=('editorial','arena','cinema','pop','minimal')
 TEMPLATE_IDS=('legacy',)+tuple(f'{style}-{lang}' for style in STYLES for lang in ('zh','en'))
 LABELS={'editorial':'刊物编辑','arena':'竞技速报','cinema':'电影片名','pop':'潮流贴纸','minimal':'极简栏目'}

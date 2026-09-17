@@ -144,10 +144,15 @@ class PackagingTests(unittest.TestCase):
                     self.assertNotIn((node.module or '').split('.')[0],forbidden,path.name)
                 if isinstance(node,ast.Call):
                     self.assertNotIn(ast.unparse(node.func),('sys.path.insert','sys.path.append','os.chdir'),path.name)
-        for name in ('assets/branding/volleymole.svg','assets/branding/volleymole.png',
-                     'assets/fonts/ZCOOLKuaiLe-Regular.ttf','licenses/tracking-MIT.txt',
-                     'licenses/volleyball-ml-models-MIT.txt','model_manifest.json'):
+        for name in ('licenses/tracking-MIT.txt', 'licenses/volleyball-ml-models-MIT.txt',
+                     'model_manifest.json', 'asset_manifest.json'):
             self.assertTrue((APP/name).is_file(),name)
+        # Binary artwork is distributed separately; the installed source pins it.
+        from volleymole.assets import load_manifest
+        files = load_manifest()['files']
+        for name in ('branding/volleymole.svg', 'branding/volleymole.png',
+                     'fonts/ZCOOLKuaiLe-Regular.ttf'):
+            self.assertIn(name, files)
 
 
 if __name__ == '__main__':

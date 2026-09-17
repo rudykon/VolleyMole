@@ -44,12 +44,16 @@ build/
 *.safetensors
 *.engine
 *.plan
+*.zip
 *.mp4
 *.mov
 *.MOV
 *.avi
 *.mkv
 *.webm
+
+# Small documentation previews are published with the source.
+!docs/images/**/*.png
 
 # Editor / OS files
 .DS_Store

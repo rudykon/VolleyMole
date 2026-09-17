@@ -59,6 +59,16 @@ That license does not relicense third-party code, dependencies, model weights,
 or separately licensed assets. This inventory is provenance, not a legal
 clearance opinion.
 
+## Presentation asset distribution
+
+Complete illustrations, font binaries, branding and transition plates are distributed
+separately in the versioned `assets-v1` GitHub Release. The source repository and
+wheel include the pinned `asset_manifest.json`, source records and license notices;
+`volleymole assets fetch` installs the pack into the user cache and validates hashes.
+The archive preserves all font notices below. Model weights, datasets and match
+recordings are not part of this asset pack. Documentation previews are committed
+separately so the repository pages remain viewable without installing assets.
+
 ## Weights and artwork
 
 `model_manifest.json` records download sources, exact byte lengths, hashes and

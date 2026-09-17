@@ -31,6 +31,9 @@ where = ["src"]
 [tool.setuptools.package-data]
 volleymole = ["*.json", "prompts/*.md", "assets/**/*", "licenses/*"]
 
+[tool.setuptools.exclude-package-data]
+volleymole = ["assets/**/*.png", "assets/**/*.ttf", "assets/**/*.otf"]
+
 [tool.uv]
 environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
 # Ultralytics requests the GUI wheel; EasyOCR requests headless. Both provide

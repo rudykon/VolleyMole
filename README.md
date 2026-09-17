@@ -38,9 +38,9 @@ VolleyMole 面向单机位排球录像：在本地识别比赛状态、动作、
 | 四卡流水线 | 支持跨批推理、辅助检测分卡及独立回合并行渲染 |
 
 <p align="center">
-  <img src="src/volleymole/assets/illustrated/volley_receive.png" alt="接球主题插画" width="150">
-  <img src="src/volleymole/assets/illustrated/volley_set.png" alt="二传主题插画" width="150">
-  <img src="src/volleymole/assets/illustrated/volley_spike.png" alt="扣球主题插画" width="150">
+  <img src="docs/images/assets/illustrated/volley_receive.png" alt="接球主题插画" width="150">
+  <img src="docs/images/assets/illustrated/volley_set.png" alt="二传主题插画" width="150">
+  <img src="docs/images/assets/illustrated/volley_spike.png" alt="扣球主题插画" width="150">
   <br><sub>项目内置的装饰插画；不是比赛检测结果或成片截图。</sub>
 </p>
 
@@ -59,7 +59,16 @@ uv sync --locked
 
 实现已统一到 `src/volleymole`，无需额外检出上游项目或准备 `tools/` 文件夹。
 
-### 2. 获取模型
+### 2. 安装完整视觉素材（约 90 MiB）
+
+```bash
+.venv/bin/volleymole assets fetch
+.venv/bin/volleymole assets verify
+```
+
+插画、字体、品牌和转场统一从 [assets-v1 Release](https://github.com/rudykon/VolleyMole/releases/tag/assets-v1) 获取，按固定大小和 SHA-256 校验后安装到用户缓存目录。源码和 wheel 保持轻量；下载一次后可离线使用。自定义目录、手动下载和校验说明见[素材安装与分发](docs/素材安装与分发.md)。README 中的预览图随仓库提供。
+
+### 3. 获取模型
 
 ```bash
 .venv/bin/volleymole models --directory models fetch
@@ -68,7 +77,7 @@ uv sync --locked
 
 模型下载后按固定大小与 SHA-256 校验，随后可在本地推理。下载地址可能受网络限制；也支持导入已取得的对应权重，见 [模型安装说明](docs/统一包安装与运行.md)。仓库不包含模型权重或比赛录像。
 
-### 3. 放入录像并运行
+### 4. 放入录像并运行
 
 将自己的比赛录像放在 `data/match.mp4`，运行无需大模型 API 的五佳球剪辑：
 
@@ -181,7 +190,7 @@ uv sync --locked
 
 | 热血漫画 | 立体黏土 | 层叠剪纸 | 东方水墨 | 复古丝网 |
 | :---: | :---: | :---: | :---: | :---: |
-| <img src="src/volleymole/assets/illustrated/themes/manga/volley_spike.png" width="125" alt="热血漫画扣球插画"> | <img src="src/volleymole/assets/illustrated/themes/clay/volley_spike.png" width="125" alt="立体黏土扣球插画"> | <img src="src/volleymole/assets/illustrated/themes/papercut/volley_spike.png" width="125" alt="层叠剪纸扣球插画"> | <img src="src/volleymole/assets/illustrated/themes/ink/volley_spike.png" width="125" alt="东方水墨扣球插画"> | <img src="src/volleymole/assets/illustrated/themes/retro/volley_spike.png" width="125" alt="复古丝网扣球插画"> |
+| <img src="docs/images/assets/illustrated/themes/manga/volley_spike.png" width="125" alt="热血漫画扣球插画"> | <img src="docs/images/assets/illustrated/themes/clay/volley_spike.png" width="125" alt="立体黏土扣球插画"> | <img src="docs/images/assets/illustrated/themes/papercut/volley_spike.png" width="125" alt="层叠剪纸扣球插画"> | <img src="docs/images/assets/illustrated/themes/ink/volley_spike.png" width="125" alt="东方水墨扣球插画"> | <img src="docs/images/assets/illustrated/themes/retro/volley_spike.png" width="125" alt="复古丝网扣球插画"> |
 | `manga` | `clay` | `papercut` | `ink` | `retro` |
 
 ```bash

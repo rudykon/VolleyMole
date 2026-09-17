@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from volleymole.assets import asset_root
 from volleymole.common import APP
 from volleymole.font_support import FontCoverageError, resolve_font, missing_glyphs, validate_render_fonts
 from volleymole.title_templates import TEMPLATE_IDS, get_template, text_layer, template_assets, headline
@@ -12,7 +13,7 @@ from volleymole.design_suites import SUITES, SuiteCard, suite_headers
 from volleymole.presentation import build_timeline, lively_headers
 
 
-@unittest.skipUnless((APP/'assets/fonts/NotoSansCJKsc-Bold.otf').is_file(), 'Local presentation fonts required')
+@unittest.skipUnless((asset_root()/'fonts/NotoSansCJKsc-Bold.otf').is_file(), 'Local presentation fonts required')
 class TitleFontRecoveryTests(unittest.TestCase):
     def test_every_template_renders_distinct_chinese_glyphs_and_mixed_text(self):
         for name in TEMPLATE_IDS[1:]:
@@ -41,12 +42,12 @@ class TitleFontRecoveryTests(unittest.TestCase):
                 timeline=build_timeline(decision,manifest,name,suite.transition)
                 title=next(s['display_title'] for s in timeline if s['kind']=='transition')
                 self.assertEqual(title,item['title'])
-                audit=validate_render_fonts(decision,APP/'assets/fonts/NotoSans-Bold.ttf','lively',name)
+                audit=validate_render_fonts(decision,asset_root()/'fonts/NotoSans-Bold.ttf','lively',name)
                 self.assertTrue(audit['titles'][0]['fallback'])
                 self.assertFalse(missing_glyphs(title,audit['titles'][0]['resolved_font']))
                 card=SuiteCard({**item,'collection':'bloopers'},title,1,suite.name,'en').image()
                 self.assertEqual(card.size,(720,1280))
-                frames=lively_headers(item,APP/'assets/fonts/NotoSans-Bold.ttf',1,suite.art,name,suite.name,'bloopers')
+                frames=lively_headers(item,asset_root()/'fonts/NotoSans-Bold.ttf',1,suite.art,name,suite.name,'bloopers')
                 expected=suite_headers({**item,'collection':'bloopers'},1,title,suite.name,'en')
                 self.assertEqual(frames[-1].tobytes(),expected[-1].tobytes())
         self.assertEqual(decision,before)
@@ -71,7 +72,7 @@ class TitleFontRecoveryTests(unittest.TestCase):
         title='排球\U0001f3d0'
         decision={'collection':'bloopers','selected':[{'rank':1,'title':title}]}
         with self.assertRaises(FontCoverageError):
-            validate_render_fonts(decision,APP/'assets/fonts/NotoSans-Bold.ttf','lively','arena-en')
+            validate_render_fonts(decision,asset_root()/'fonts/NotoSans-Bold.ttf','lively','arena-en')
         for name in TEMPLATE_IDS[1:]:
             with self.subTest(template=name),self.assertRaises(FontCoverageError):
                 text_layer(title,48,'white',500,name)

@@ -22,6 +22,7 @@
 | `evaluate_events.py` | 在有对应既有人工评分及运行记录时，按比赛评估候选、前五、解释、剪辑及耗时；动作标签不能替代主观评分 |
 | `probe_event_models.py` | 对已授权上传的同一原片区间测试粗读/复核，使用与生产相同的严格事件 JSON Schema；支持显式推理强度，保留空响应、失败及结构化降级记录 |
 | `replay_event_failures.py` | 使用生产 `frame_anchors_v3` 流程重放既有失败任务；固定 `glm-5.3-flash`、新目录和有限重试，保留失败与耗时；上传前须明确授权 |
+| `build_asset_bundle.py` | 将本地视觉素材打包为固定版本 ZIP，并生成大小、逐文件 SHA-256 和 Release 附件；不打包模型或录像 |
 | `check_release.py` | 仅使用 Python 标准库；检查待发布文件，支持 `--history` |
 | `preview_art_themes.py` | 无需 GPU、模型或 API，检查透明素材并导出实际标题卡、角标及 HTML 图集 |
 | `preview_title_templates.py` | 十套中英标题与五套插画组合预览；无需 GPU、模型或 API |

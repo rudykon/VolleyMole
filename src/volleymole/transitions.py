@@ -1,11 +1,12 @@
 """Generated material plates animated without changing rally or title timing."""
 from pathlib import Path
 from .common import APP
+from .assets import asset_root
 
 STYLE_LABELS = {'fade': '原版淡入淡出', 'velocity': '竞技斜切', 'paper': '纸艺翻页',
                 'ink': '水墨流动', 'prism': '棱镜折光', 'film': '胶片光泄'}
 STYLE_IDS = tuple(STYLE_LABELS)
-ASSET_ROOT = APP / 'assets/transitions'
+ASSET_ROOT = asset_root() / 'transitions'
 
 
 def validate_style(style):
@@ -41,7 +42,7 @@ class TransitionRenderer:
             return
         raw = cv2.imread(str(transition_assets(style)[1]), cv2.IMREAD_COLOR)
         if raw is None:
-            raise ValueError(f'缺失内置转场素材：{style}')
+            raise ValueError(f'缺失转场素材：{style}；请运行 volleymole assets fetch')
         h, w = card.shape[:2]
         # Cover fit keeps source aspect ratio; the original PNG is untouched.
         scale = max(w / raw.shape[1], h / raw.shape[0])

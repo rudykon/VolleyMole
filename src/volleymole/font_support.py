@@ -10,8 +10,9 @@ from struct import error as StructError
 from fontTools.ttLib import TTFont, TTCollection, TTLibError
 
 from .common import APP, identity
+from .assets import asset_root
 
-FONTS = APP/'assets/fonts'
+FONTS = asset_root()/'fonts'
 BUNDLED_FONTS = tuple(FONTS/name for name in (
     'NotoSansCJKsc-Bold.otf', 'NotoSerifCJKsc-Regular.otf',
     'NotoSans-Bold.ttf', 'NotoSans-BoldItalic.ttf', 'NotoSerif-Regular.ttf',
@@ -120,7 +121,7 @@ def _select(required, keys):
         if required <= coverage:
             return key
     if not usable:
-        raise FontCoverageError('没有可加载的字体；请部署 assets/fonts 中的 Noto 字体或安装系统 Noto CJK 字体。')
+        raise FontCoverageError('没有可加载的字体；请运行 volleymole assets fetch 或安装系统 Noto CJK 字体。')
     missing = sorted(required-union)
     if missing:
         details = ', '.join(f'U+{code:04X} ({unicodedata.name(chr(code), "UNNAMED")})' for code in missing[:12])

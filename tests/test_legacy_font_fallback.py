@@ -8,13 +8,14 @@ from unittest.mock import patch
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from volleymole.assets import asset_root
 from volleymole.common import APP, DEFAULT_FONT, save_json
 from volleymole.font_support import FontCoverageError, load_font
 from volleymole import illustrated, media_worker
 
 
-LATIN = APP/'assets/fonts/NotoSans-Bold.ttf'
-SIMPLIFIED_CHINESE = APP/'assets/fonts/NotoSansCJKsc-Bold.otf'
+LATIN = asset_root()/'fonts/NotoSans-Bold.ttf'
+SIMPLIFIED_CHINESE = asset_root()/'fonts/NotoSansCJKsc-Bold.otf'
 
 
 def previous_lettering(text, size, fill, max_width, tilt=0, outline=None):

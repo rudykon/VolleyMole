@@ -4,6 +4,7 @@ import ast
 import json
 import os
 from pathlib import Path
+from .assets import asset_root
 import subprocess
 import time
 
@@ -11,7 +12,7 @@ ROOT = Path(os.environ.get('VOLLEYMOLE_WORKSPACE', Path.cwd())).resolve()
 APP = Path(__file__).resolve().parent
 DEFAULT_FONT = Path('/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc')
 if not DEFAULT_FONT.is_file():
-    DEFAULT_FONT = APP/'assets/fonts/ZCOOLKuaiLe-Regular.ttf'
+    DEFAULT_FONT = asset_root()/'fonts/ZCOOLKuaiLe-Regular.ttf'
 
 
 def read_json(path):

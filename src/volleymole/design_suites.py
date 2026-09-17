@@ -6,6 +6,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 import math
 from .common import APP
+from .assets import asset_root
 from .art_themes import ArtTheme, get_theme
 from .title_templates import FONTS, get_template, text_layer, words
 
@@ -46,7 +47,7 @@ SUITES = (
                 (65,43,32),(243,230,204),(196,101,51),(185,147,91)),
 )
 SUITE_IDS = ('custom',)+tuple(s.name for s in SUITES)
-EXTRA_ART = APP/'assets/design_suites/aurora-ball.png'
+EXTRA_ART = asset_root()/'design_suites/aurora-ball.png'
 
 
 def get_suite(name='custom'):
