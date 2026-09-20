@@ -276,6 +276,34 @@ class AnalysisRoutingTests(unittest.TestCase):
         self.assertEqual(len(read_json(output/'edit_decision.json')['selected']), 10)
         self.assertFalse((output/'render_report.json').exists())
 
+    def test_single_replay_stage_runs_after_rank_and_before_render(self):
+        def review(directory,args):
+            self.assertEqual(len(read_json(directory/'edit_decision.json')['selected']),10)
+            self.assertFalse((directory/'render_report.json').exists())
+            return {'status':'complete'}
+        with patch('volleymole.replay_stage.run_review',side_effect=review) as called:
+            output,rank_call,verify_call=self.run_single('--stop-after','replay')
+        called.assert_called_once();rank_call.assert_called_once();verify_call.assert_not_called()
+        self.assertFalse((output/'render_report.json').exists())
+
+    def test_multiset_replay_stage_runs_after_global_ranking(self):
+        def review(directory,args):
+            self.assertEqual(len(read_json(directory/'match_manifest.json')['sources']),2)
+            self.assertEqual(len(read_json(directory/'edit_decision.json')['selected']),10)
+            self.assertFalse((directory/'render_report.json').exists())
+            return {'status':'complete'}
+        with patch('volleymole.replay_stage.run_review',side_effect=review) as called:
+            output,rank_call,verify_call=self.run_match('--stop-after','replay')
+        called.assert_called_once();rank_call.assert_called_once();verify_call.assert_not_called()
+        self.assertEqual(read_json(output/'match_summary.json')['replay_review_status'],'complete')
+
+    def test_required_replay_failure_prevents_render_and_verify(self):
+        with patch('volleymole.replay_stage.run_review',side_effect=RuntimeError('review incomplete')), \
+                self.assertRaisesRegex(RuntimeError,'review incomplete'):
+            self.run_single('--replay-review','required')
+        self.assertFalse((self.root/'single/render_report.json').exists())
+        self.assertNotIn('render',read_json(self.root/'single/state.json')['stages'])
+
     def test_manifest_stop_never_starts_event_analysis(self):
         output, rank_call, verify_call = self.run_single('--analysis-mode', 'events', '--stop-after', 'manifest')
         self.discovery.assert_not_called(); self.collections.assert_not_called()

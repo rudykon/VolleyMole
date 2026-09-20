@@ -141,7 +141,9 @@ def execute_match(args,day,sets):
             if target not in targets:raise ValueError('整场 --rerun-from 支持 previews/rank/render/verify；重推理用 --no-analysis-cache')
             for name in targets[targets.index(target):]:stages.data['stages'].pop(name,None)
         art,title,transition=resolve_design(args.design_suite,args.design_language,args.art_theme,args.title_template,args.transition_style)
+        from .replay_stage import config_from as replay_config
         save_json(directory/'run_config.json',{'mode':'date_grouped_match','date':day,'top_k':args.top_k,
+            **replay_config(args),
             'collection':args.collection,'analysis_mode':args.analysis_mode,'analysis_timeout':args.analysis_timeout,
             'review_budget_fraction':args.review_budget_fraction,'budget_scope':'per_source',
             'vision_model':args.vision_model,'model':args.model,'semantic_modality':args.semantic_modality,
@@ -200,9 +202,17 @@ def execute_match(args,day,sets):
                 'analysis_mode':args.analysis_mode,'ranking_mode':decision.get('ranking_mode'),'fallback':decision.get('fallback')}
             save_json(directory/'match_summary.json',result)
             return result
+        from .replay_stage import run_review
+        replay_report=run_review(directory,args)
+        if args.stop_after=='replay':
+            result={'date':day,'directory':str(directory),'status':'replay_reviewed',
+                    'replay_review_status':replay_report['status']}
+            save_json(directory/'match_summary.json',result)
+            return result
         suffix='_lively' if args.style=='lively' else ''
         report_path=directory/f'render_report{suffix}.json'
         render_sig={**signature,'decision':digest(directory/'edit_decision.json'),'config':read_json(directory/'run_config.json'),
+                    'replay_review':digest(directory/'replay_reviews.json'),
                     'fonts':font_fingerprint(args.font),'assets':[digest(p) for p in asset_paths(art,title,transition,args.design_suite)]
                     if args.style=='lively' else []}
         def make_video():
@@ -213,6 +223,7 @@ def execute_match(args,day,sets):
         stages.execute('verify',{'output':digest(output),'report':digest(report_path),'code':code,'fonts':font_fingerprint(args.font)},
                        lambda:verify(directory,args.top_k,args.style,sys.executable))
         result={'date':day,'status':'passed','sets':[{'number':n,'path':str(p)} for n,p in sets],
+                'replay_review_status':replay_report['status'],
                 'analysis_mode':args.analysis_mode,'ranking_mode':decision.get('ranking_mode'),'fallback':decision.get('fallback'),
                 'eligible_rallies':sum(r['eligible'] for r in manifest['rallies']),'top_k':args.top_k,'output':output,
                 'elapsed_sec':round(time.monotonic()-started,3),'stages':stages.current_run}

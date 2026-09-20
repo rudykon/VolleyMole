@@ -52,6 +52,7 @@ jobs:
             test_assets \
             test_audio_detector \
             test_auto_blooper_annotations \
+            test_automatic_replay \
             test_blooper_benchmark \
             test_event_budgets \
             test_event_pipeline \
@@ -76,6 +77,14 @@ jobs:
             test_ranker_recovery \
             test_rally_evidence \
             test_replay_event_failures \
+            test_replay_failed_requests \
+            test_replay_motion \
+            test_replay_motion_integration \
+            test_replay_requests \
+            test_replay_selection \
+            test_replay_uncertain_selection \
+            test_replay_verify_contract \
+            test_replay_visual_context \
             test_semantic \
             test_semantic_request_limits \
             test_semantic_retries \

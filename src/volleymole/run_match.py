@@ -29,13 +29,17 @@ def verify(directory, top_k, style='classic', alignment_python=None):
     manifest=read_json(directory/'match_manifest.json');decision=read_json(directory/'edit_decision.json')
     validate_decision(decision,manifest,directory,top_k)
     render=read_json(directory/f'render_report{suffix}.json')
+    if style=='lively':
+        from .replay_stage import load_reviewed_manifest
+        manifest,_=load_reviewed_manifest(directory,render.get('replay_review_report'))
     from .font_support import validate_render_fonts
     font_validation=validate_render_fonts(decision,render.get('font_path',DEFAULT_FONT),style,render.get('title_template','legacy'))
     if len(render['clips'])!=top_k or [c['rank'] for c in render['clips']]!=list(range(top_k,0,-1)):
         raise ValueError('成片回合数量或播放顺序错误')
     if style=='lively':
-        from .presentation import validate_timeline
+        from .presentation import validate_timeline, validate_replay_evidence
         validate_timeline(render,decision)
+        validate_replay_evidence(render,decision,manifest)
     reports=[]
     for item in render.get('segments',render['clips'])+[{'path':render['output'],'duration_sec':render['expected_duration_sec']}]:
         path=Path(item['path'])
@@ -142,7 +146,9 @@ def argument_parser():
     parser.add_argument('--design-suite',choices=SUITE_IDS,default='custom',help='完整设计套装；优先于插画/标题/转场单项，custom 保留自由搭配')
     parser.add_argument('--design-language',choices=('zh','en'),default='zh',help='完整套装的文字语言，默认中文')
     parser.add_argument('--quality',choices=QUALITY_IDS,default=DEFAULT_QUALITY,help='成片画质，默认 1080p；720p 更快，1440p / 2160p 更精细')
-    parser.add_argument('--stop-after',choices=['manifest','rank','render'],default='render')
+    from .replay_stage import add_arguments
+    add_arguments(parser)
+    parser.add_argument('--stop-after',choices=['manifest','rank','replay','render'],default='render')
     parser.add_argument('--rerun-from',choices=['inference','analytics','tracking','player','rallies','previews','rank','render','verify'])
     return parser
 
@@ -154,6 +160,9 @@ def resolved_analysis_mode(args):
 
 def validate_event_arguments(args, parser):
     import math
+    from .replay_stage import validate_arguments
+    try:validate_arguments(args)
+    except ValueError as exc:parser.error(str(exc))
     args.analysis_mode=resolved_analysis_mode(args)
     if args.analysis_mode=='rallies' and args.collection!='highlights':
         parser.error('完整回合流程仅支持精彩榜；趣味/双榜请使用 --analysis-mode events --ranker auto')
@@ -303,7 +312,9 @@ def main(argv=None):
     cached={k:args.evidence_cache.resolve()/k for k in ('analytics','tracking')} if args.evidence_cache else {}
     analytics_cache=args.analytics_cache or cached.get('analytics')
     tracking_cache=args.tracking_cache or cached.get('tracking')
+    from .replay_stage import config_from as replay_config
     save_json(directory/'run_config.json',{'video':str(video),'top_k':args.top_k,'focus_player':args.focus_player,
+              **replay_config(args),
               'quality':args.quality,'collection':args.collection,'analysis_mode':args.analysis_mode,
               'analysis_timeout':args.analysis_timeout,'review_budget_fraction':args.review_budget_fraction,
               'budget_scope':'per_source','vision_model':args.vision_model,'model':args.model,
@@ -395,6 +406,9 @@ def main(argv=None):
                             'prompt':digest(APP/'prompts/rank_top_plays.md'),'vision_prompt':digest(APP/'prompts/review_frames.md')},
                             lambda:rank(manifest,directory,args.top_k,args.focus_player,args.ranker,args.api_base,args.model,args.api_timeout,args.vision_model))
     if args.stop_after=='rank':finish_timing();return
+    from .replay_stage import run_review
+    replay_report=run_review(directory,args)
+    if args.stop_after=='replay':finish_timing();return
     def make_video():
         run([args.tracking_python,'-m','volleymole.media_worker','render','--run',directory,'--font',args.font,'--style',args.style,
              '--workers',args.render_workers,'--art-theme',args.art_theme,'--title-template',args.title_template,'--transition-style',args.transition_style,
@@ -403,16 +417,19 @@ def main(argv=None):
         return report['output'],[report['output'],directory/f'render_report{suffix}.json']+[c['path'] for c in report.get('segments',report['clips'])]
     if args.style=='lively':prepare_brand()
     output=stages.execute(render_stage,{'decision':digest(decision),'manifest':digest(manifest_path),'code':code['media_worker.py'],
+                          'replay_review':digest(directory/'replay_reviews.json'),
                           'render_workers':args.render_workers,'art_theme':args.art_theme,'title_template':args.title_template,'transition_style':args.transition_style,
                           'design_suite':args.design_suite,'design_language':args.design_language,
                           'quality':args.quality,'quality_code':digest(APP/'quality.py'),
                           'sources_code':digest(APP/'sources.py'),
-                          'presentation':code['presentation.py'],'camera':code['camera.py'],'style':args.style,
+                          'presentation':code['presentation.py'],'replay':code['replay.py'],'camera':code['camera.py'],'style':args.style,
                           'illustrated':code['illustrated.py'],
                           'assets':[identity(p) for p in asset_paths(args.art_theme,args.title_template,args.transition_style,args.design_suite)] if args.style=='lively' else [],
                           'schema':code['schemas.py'],'fonts':font_fingerprint(args.font)},make_video)
     stages.execute(verify_stage,{'output':digest(output),'decision':digest(decision),'report':digest(directory/f'render_report{suffix}.json'),
+                             'replay_review':digest(directory/'replay_reviews.json'),
                              'code':code['run_match.py'],'alignment':code['check_alignment.py'],
+                             'manifest':digest(manifest_path),'replay':code['replay.py'],'presentation':code['presentation.py'],
                              'sources_code':digest(APP/'sources.py'),
                              'fonts':font_fingerprint(args.font),
                              'title_cards':digest(APP/'check_title_cards.py') if args.style=='lively' else None},

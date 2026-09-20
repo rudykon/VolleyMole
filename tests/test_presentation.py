@@ -17,7 +17,10 @@ class PresentationTests(unittest.TestCase):
 
     def timeline(self,k):
         from volleymole.ranker import rule_decision
-        for r in self.rallies:r['preview_times_sec']=[r['start_sec'],r['start_sec']+2,r['end_sec']]
+        for r in self.rallies:
+            r['preview_times_sec']=[r['start_sec'],r['start_sec']+2,r['end_sec']]
+            r['action_events']=[dict(action='spike',start_sec=r['start_sec']+4,
+                                     end_sec=r['start_sec']+4.5,detection_frames=3)]
         decision=rule_decision(self.rallies,k)
         rows=build_timeline(decision,self.manifest)
         placeholder=self.root/'segment.mp4';placeholder.touch()
@@ -32,9 +35,9 @@ class PresentationTests(unittest.TestCase):
             self.assertEqual(len([r for r in rows if r['kind']=='transition']),k)
             self.assertEqual(sum(r['duration_sec'] for r in rows if r['kind']=='teaser'),5)
             self.assertTrue(all(r['duration_sec']==3 and r['title_hold_sec']>=2 for r in rows if r['kind']=='transition'))
-            self.assertTrue(all(r['duration_sec']==3 for r in rows if r['kind']=='replay'))
+            self.assertTrue(all(r['duration_sec']==6 for r in rows if r['kind']=='replay'))
             self.assertTrue(all(r['duration_sec']==12 for r in rows if r['kind']=='rally'))
-            self.assertTrue(all(not r['visual_review_used'] and r['peak_evidence']=='candidate_preview_peak'
+            self.assertTrue(all(not r['visual_review_used'] and r['peak_evidence']=='local_action_event'
                                 for r in rows if r['kind'] in ('teaser','replay')))
 
     def test_peak_clamps_at_clip_edges_and_handles_short_rally(self):

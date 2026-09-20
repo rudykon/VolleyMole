@@ -5,7 +5,7 @@ import sys
 
 def main():
     parser = argparse.ArgumentParser(prog='volleymole', description='完整回合五佳球／十佳球；可选事件理解双榜')
-    parser.add_argument('command', choices=['run','match','infer','models','assets','verify'])
+    parser.add_argument('command', choices=['run','match','infer','models','assets','verify','review-replays'])
     if len(sys.argv)==1 or sys.argv[1] in ('-h','--help'):
         parser.print_help()
         return
@@ -21,6 +21,8 @@ def main():
         from .inference import main as command
     elif args.command == 'verify':
         from .run_match import verify_cli as command
+    elif args.command == 'review-replays':
+        from .replay_stage import main as command
     else:
         from .run_match import main as command
     try:

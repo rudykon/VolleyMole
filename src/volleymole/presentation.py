@@ -43,17 +43,26 @@ def peak_window(item, rally, length=2.0):
 
 def build_timeline(decision, manifest,title_template='legacy',transition_style='fade'):
     from .transitions import validate_style
+    from .replay import replay_window
+    from .sources import source_for
     validate_style(transition_style)
     by_id = {r['rally_id']: r for r in manifest['rallies']}
+    replays = {item['rally_id']: replay_window(item, by_id[item['rally_id']],
+               source_for(manifest,item['rally_id']) if 'replay_review' in by_id[item['rally_id']] else {})
+               for item in decision['selected']}
     segments = []
     def add(kind, frames, **data):
         data['collection']=decision.get('collection','highlights')
         data['rank_label']=rank_label(data.get('rank',data.get('next_rank')),len(decision['selected']),title_template,data['collection'])
-        segments.append(dict(kind=kind, output_frames=frames, duration_sec=frames/FPS, **data))
+        segments.append(dict(kind=kind, output_frames=frames, duration_sec=frames/FPS, replay_policy_version=2, **data))
     # Five one-second highlights, followed by readable full-screen title cards.
     for item in reversed(decision['selected'][:5]):
-        window = peak_window(item, by_id[item['rally_id']], 1.)
-        window['visual_review_used']=decision.get('ranking_mode') in ('multimodal_api','vision_then_text_api')
+        action = replays[item['rally_id']]
+        rally = by_id[item['rally_id']]
+        if action:
+            rally = {**rally, 'peak_sec':action['peak_sec'], 'peak_evidence':action['peak_evidence']}
+        window = peak_window(item, rally, 1.)
+        window['visual_review_used']=bool(action and action['visual_review_used'])
         add('teaser', 30, playback_rate=1., **window)
     for item in reversed(decision['selected']):
         add('transition', TRANSITION_FRAMES, next_rank=item['rank'],top_k=len(decision['selected']),
@@ -61,12 +70,14 @@ def build_timeline(decision, manifest,title_template='legacy',transition_style='
             illustration=illustration_for(item).name,transition_style=transition_style,
             title_hold_sec=(TRANSITION_FRAMES-2*TRANSITION_RAMP_FRAMES)/FPS)
         frames = math.ceil((item['clip_end_sec']-item['clip_start_sec'])*FPS-1e-6)
+        window = replays[item['rally_id']]
         add('rally', frames, rank=item['rank'], rally_id=item['rally_id'], playback_rate=1.,
-            source_start_sec=item['clip_start_sec'], source_end_sec=item['clip_end_sec'])
-        window = peak_window(item, by_id[item['rally_id']])
-        window['visual_review_used']=decision.get('ranking_mode') in ('multimodal_api','vision_then_text_api')
-        frames = math.ceil((window['source_end_sec']-window['source_start_sec'])/REPLAY_SPEED*FPS-1e-6)
-        add('replay', frames, playback_rate=REPLAY_SPEED, **window)
+            source_start_sec=item['clip_start_sec'], source_end_sec=item['clip_end_sec'],
+            replay_expected=window is not None,
+            replay_skip_reason=None if window else 'No complete reviewed or supported attack/defense sequence; midpoint/set replay omitted.')
+        if window:
+            frames = math.ceil((window['source_end_sec']-window['source_start_sec'])/REPLAY_SPEED*FPS-1e-6)
+            add('replay', frames, playback_rate=REPLAY_SPEED, rank=item['rank'], rally_id=item['rally_id'], **window)
     offset = 0
     for i, segment in enumerate(segments):
         if 'sources' in manifest and 'rally_id' in segment:
@@ -91,8 +102,9 @@ def validate_timeline(report, decision):
     expected={r['rank']:r for r in decision['selected']}
     if [s['rank'] for s in segments if s['kind']=='rally']!=list(reversed(expected)):
         raise ValueError('完整回合数量或倒计时顺序错误')
-    if [s['rank'] for s in segments if s['kind']=='replay']!=list(reversed(expected)):
-        raise ValueError('每个回合必须有且只有一次短回放')
+    planned = [s['rank'] for s in segments if s['kind']=='rally' and s.get('replay_expected',True)]
+    if [s['rank'] for s in segments if s['kind']=='replay']!=planned:
+        raise ValueError('回放数量或顺序与动作复核计划不一致')
     teaser_count = min(5, len(expected))
     if [s['kind'] for s in segments[:teaser_count]]!=['teaser']*teaser_count:
         raise ValueError('片头快切数量与实际入选数不符')
@@ -122,8 +134,25 @@ def validate_timeline(report, decision):
                 raise ValueError('预告或回放越出原回合')
             if segment['kind']=='rally' and (a!=item['clip_start_sec'] or b!=item['clip_end_sec']):
                 raise ValueError('转场不能裁断完整回合')
+            if segment.get('replay_policy_version')==2 and segment['kind']=='replay':
+                if not a <= segment['action_start_sec'] <= segment['peak_sec'] <= segment['action_end_sec'] <= b:
+                    raise ValueError('回放截断动作准备、触球或后续结果')
+                frames=math.ceil((b-a)/segment['playback_rate']*FPS-1e-6)
+                if frames!=segment['output_frames']:
+                    raise ValueError('回放长度与完整动作区间不一致')
         if not Path(segment['path']).is_file():raise ValueError('缺失时间线片段')
     if abs(report['expected_duration_sec']-offset/FPS)>1e-6:raise ValueError('成片总长与时间线不符')
+
+
+def validate_replay_evidence(report, decision, manifest):
+    """Check against source-bound review data, not only the report's own claims."""
+    if report.get('replay_policy_version') != 2:
+        return
+    expected=build_timeline(decision,manifest,report.get('title_template','legacy'),report.get('transition_style','fade'))
+    fields=('kind','rank','next_rank','rally_id','source_start_sec','source_end_sec','output_frames',
+            'peak_sec','action_start_sec','action_end_sec','replay_expected','replay_selection','visual_review_used')
+    if [[row.get(k) for k in fields] for row in expected] != [[row.get(k) for k in fields] for row in report['segments']]:
+        raise ValueError('实际回放与原片动作复核记录不一致')
 
 
 def lively_headers(item, font_path, top_k, art_theme='default',title_template='legacy',design_suite='custom', collection='highlights'):
@@ -182,7 +211,9 @@ def render_lively(directory, font, workers=1, art_theme='default',title_template
     prepare_brand()
     for asset in asset_paths(art_theme,title_template,transition_style,design_suite):
         if not asset.is_file():raise ValueError(f'缺失内置风格素材：{asset}')
-    manifest = read_json(directory/'match_manifest.json'); decision = read_json(directory/'edit_decision.json')
+    from .replay_stage import load_reviewed_manifest
+    manifest,replay_review_report = load_reviewed_manifest(directory)
+    decision = read_json(directory/'edit_decision.json')
     validate_decision(decision,manifest,directory,len(decision['selected']))
     from .font_support import validate_render_fonts
     font_validation=validate_render_fonts(decision,font,'lively',title_template)
@@ -230,7 +261,9 @@ def render_lively(directory, font, workers=1, art_theme='default',title_template
     output=directory/f'top{len(clips)}_lively.mp4'
     concatenate_segments(segments,output,quality)
     render_elapsed=time.perf_counter()-started
-    save_json(directory/'render_report_lively.json',{'output_quality':q.report(),'output':str(output),'style':'lively','design_revision':10,'order':'countdown',
+    save_json(directory/'render_report_lively.json',{'output_quality':q.report(),'output':str(output),'style':'lively','design_revision':11,'order':'countdown',
+        'replay_policy_version':2,
+        'replay_review_report':replay_review_report,
         'design_suite':design_suite,'design_language':language,'design_spec':design_manifest(design_suite,language),
         'transition_style':transition_style,
         'title_template':title_template,
