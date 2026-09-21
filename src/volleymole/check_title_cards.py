@@ -134,13 +134,14 @@ def check(directory):
         # Reconstruct the camera crop from original footage, independently of the
         # encoded header: transparent must mean live source pixels, not blank black.
         layout=clip['detail_layout']
-        if (layout['top'],layout['height'],layout['overview_top'])!=(0,875,875):
-            raise ValueError('比赛画面没有延伸到顶部或全场小画面位置发生变化')
+        expected_layout=(0,1280,None) if clip.get('view_layout')=='single' else (0,875,875)
+        if (layout['top'],layout['height'],layout['overview_top'])!=expected_layout:
+            raise ValueError('比赛画面布局与记录不符，或没有延伸到顶部')
         if not 1<=len(clip['header_source_samples'])<=3:raise ValueError('缺少顶部源画面对照采样')
         for sample in clip['header_source_samples']:
             original=frame_at(source['path'],sample['source_sec'],source['width'])
             left=sample['crop_left'];width=layout['source_crop_width']
-            background=cv2.resize(original[:layout['source_height'],left:left+width],(720,875),
+            background=cv2.resize(original[:layout['source_height'],left:left+width],(720,layout['height']),
                                   interpolation=cv2.INTER_AREA)[:110]
             relative=sample['output_frame']/30
             errors={}

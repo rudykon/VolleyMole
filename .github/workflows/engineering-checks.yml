@@ -54,12 +54,14 @@ jobs:
             test_auto_blooper_annotations \
             test_automatic_replay \
             test_blooper_benchmark \
+            test_chat_stream \
             test_event_budgets \
             test_event_pipeline \
             test_event_schema \
             test_event_wire \
             test_events \
             test_font_support \
+            test_gemini_transport \
             test_gpu_stages \
             test_integration_core.RegistryTests \
             test_integration_core.PacketTests \
@@ -67,6 +69,8 @@ jobs:
             test_integration_core.PackagingTests \
             test_llm_transport \
             test_match_collection \
+            test_meme_audio \
+            test_meme_director \
             test_performance \
             test_pipeline \
             test_probe_event_models \
@@ -89,6 +93,7 @@ jobs:
             test_semantic_request_limits \
             test_semantic_retries \
             test_shared \
+            test_single_view \
             test_sound_calibration \
             test_sound_configuration \
             test_svhighlights_eval \

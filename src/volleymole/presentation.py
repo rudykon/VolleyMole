@@ -168,15 +168,14 @@ def overlay_asset(path, kind, font_path, index=0, art_theme='default',title_temp
 def effect_clip(source, path, segment, relative_start, overlay,design_suite='custom',quality='720p'):
     from .quality import get_quality
     q=get_quality(quality)
-    top=round(110*q.width/720);bottom=round(875*q.width/720)
+    top=round(110*q.width/720)
     rate = segment['playback_rate']; duration = segment['duration_sec']
     span = segment['source_end_sec']-segment['source_start_sec']
     # Teasers are taken from a rendered rally, whose top area also carries its
     # rank header.  Replace that area with live court pixels before applying
     # the transparent teaser lettering, so no second title shows through.
-    clean_teaser = ('[base]split=2[base_video][court_source];'
-                    f'[court_source]crop={q.width}:{bottom-top}:0:{top}:exact=1,scale={q.width}:{bottom}[court];'
-                    '[base_video][court]overlay=0:0:shortest=1[v];'
+    clean_teaser = (f'[base]crop={q.width}:{q.height-top}:0:{top}:exact=1,'
+                    f'scale=-2:{q.height},crop={q.width}:{q.height}:exact=1,setsar=1[v];'
                     if segment['kind']=='teaser' else '[base]null[v];')
     ui=f'[1:v]scale={q.width}:{q.height}:flags=lanczos,format=rgba'+(',fade=t=in:st=0:d=0.12:alpha=1' if design_suite!='custom' else '')+'[ui];'
     graph = (f'[0:v]setpts=(PTS-STARTPTS)/{rate},fps=30,tpad=stop_mode=clone:stop_duration=1,'
@@ -261,7 +260,8 @@ def render_lively(directory, font, workers=1, art_theme='default',title_template
     output=directory/f'top{len(clips)}_lively.mp4'
     concatenate_segments(segments,output,quality)
     render_elapsed=time.perf_counter()-started
-    save_json(directory/'render_report_lively.json',{'output_quality':q.report(),'output':str(output),'style':'lively','design_revision':11,'order':'countdown',
+    save_json(directory/'render_report_lively.json',{'output_quality':q.report(),'output':str(output),'style':'lively','design_revision':12,'order':'countdown',
+        'view_layout':'single','simultaneous_views':1,
         'replay_policy_version':2,
         'replay_review_report':replay_review_report,
         'design_suite':design_suite,'design_language':language,'design_spec':design_manifest(design_suite,language),

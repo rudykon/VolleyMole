@@ -209,7 +209,6 @@ def overlay(path,kind,font_path,index=0,art_theme='default',title_template='lega
         canvas.alpha_composite(text,(29,125))
         draw.text((228,145),'0.67×',font=load_font('0.67×',font_path,28),fill=CREAM,
                   stroke_width=2,stroke_fill=INK)
-        draw.rectangle((0,111,719,874),outline=COLORS[0]+(255,),width=4)
     canvas.save(path)
 
 

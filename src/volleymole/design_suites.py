@@ -265,10 +265,6 @@ def suite_overlay(path,kind,index,name,language='zh'):
         canvas.alpha_composite(title,(29,125))
         speed=text_layer('0.67×',22,s.paper,125,template,outline=s.ink)
         canvas.alpha_composite(speed,(238,137))
-        for x,sign in ((1,1),(718,-1)):
-            for y,direction in ((112,1),(873,-1)):
-                draw.line((x,y,x+sign*30,y),fill=s.accent,width=2)
-                draw.line((x,y,x,y+direction*25),fill=s.accent,width=2)
     canvas.save(path)
 
 

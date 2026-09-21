@@ -101,10 +101,9 @@ def render_clip(directory, item, manifest, font_path, center_only=False, style='
     out.parent.mkdir(exist_ok=True)
     temp=out.with_name(out.stem+'.tmp.mp4')
     log=out.with_suffix('.log')
-    header_h,detail_h,overview_h=110,765,405
+    header_h=110
     detail_top=0 if style=='lively' else header_h
-    picture_h=header_h+detail_h-detail_top
-    # The inset keeps all players visible even when the detail crop follows a ball.
+    picture_h=1280-detail_top
     decision = read_json(directory/'edit_decision.json')
     count = len(decision['selected'])
     lively=None
@@ -116,17 +115,11 @@ def render_clip(directory, item, manifest, font_path, center_only=False, style='
         header=_classic_header(item,count,font_path,decision.get('collection','highlights'))
         header_array=cv2.cvtColor(np.asarray(header),cv2.COLOR_RGB2BGR)
     accent=palette(art_theme,design_suite).colors[1][::-1] if style=='lively' else (54,190,248)
-    court_label=None
-    if style=='lively' and design_suite!='custom':
-        from .title_templates import text_layer
-        theme=palette(art_theme,design_suite)
-        label=text_layer('全场视角' if get_template(title_template).language=='zh' else 'FULL COURT',16,theme.cream,260,title_template,outline=theme.ink)
-        court_label=cv2.cvtColor(np.asarray(label),cv2.COLOR_RGBA2BGRA)
-    # Use a top-anchored court detail to discard empty foreground floor. The full
-    # original frame is always available in the inset immediately below it.
-    detail_source_h=min(h,max(int(.68*h),int(np.percentile(samples[:,2],95)+.3*h) if samples.size else h))
-    detail_source_h=min(h,max(detail_source_h,round(h*.72)))
+    # One continuous picture fills the portrait frame. Preserve source height
+    # where possible so removing the overview does not also remove the landing.
+    detail_source_h=min(h,round(w*picture_h/720))
     crop_width=min(w,round(detail_source_h*720/picture_h))
+    crop_lefts=[max(0,min(int(center)-crop_width//2,w-crop_width)) for center in centers]
     decoder_cmd=['ffmpeg','-v','error','-threads','2','-ss',str(start),'-i',source['path'],'-t',str(frames/30),
                  '-vf','fps=30','-frames:v',str(frames),'-f','rawvideo','-pix_fmt','bgr24','pipe:1']
     encoder_cmd=['ffmpeg','-y','-v','error','-f','rawvideo','-pix_fmt','bgr24','-s',f'{q.width}x{q.height}','-r','30','-i','pipe:0']
@@ -149,19 +142,11 @@ def render_clip(directory, item, manifest, font_path, center_only=False, style='
                 frame=np.frombuffer(data,np.uint8).reshape(h,w,3)
                 canvas=np.empty((q.height,q.width,3),np.uint8)
                 crop=crop_frame(frame[:detail_source_h],int(centers[i]),crop_width,'none')
-                canvas[scaled(detail_top):scaled(875)]=cv2.resize(crop,(q.width,scaled(875)-scaled(detail_top)),interpolation=cv2.INTER_LANCZOS4 if q.width>crop.shape[1] else cv2.INTER_AREA)
+                canvas[scaled(detail_top):]=cv2.resize(crop,(q.width,q.height-scaled(detail_top)),interpolation=cv2.INTER_LANCZOS4 if q.width>crop.shape[1] else cv2.INTER_AREA)
                 if lively:
                     canvas[:scaled(header_h)]=composite_header(canvas[:scaled(header_h)],cv2.resize(lively[min(i,len(lively)-1)],(q.width,scaled(header_h)),interpolation=cv2.INTER_LANCZOS4))
                 else:
                     canvas[:scaled(header_h)]=cv2.resize(header_array,(q.width,scaled(header_h)),interpolation=cv2.INTER_LANCZOS4)
-                canvas[scaled(875):]=cv2.resize(frame,(q.width,q.height-scaled(875)),interpolation=cv2.INTER_AREA)
-                cv2.rectangle(canvas,(0,scaled(875)),(q.width,scaled(878)),accent,-1)
-                if court_label is not None:
-                    label=cv2.resize(court_label,(scaled(court_label.shape[1]),scaled(court_label.shape[0])),interpolation=cv2.INTER_LANCZOS4)
-                    lh,lw=label.shape[:2];y,x=scaled(881),scaled(12)
-                    canvas[y:y+lh,x:x+lw]=composite_header(canvas[y:y+lh,x:x+lw],label)
-                else:
-                    cv2.putText(canvas,'FULL COURT',(scaled(16),scaled(904)),cv2.FONT_HERSHEY_SIMPLEX,.55*scale,(255,255,255),max(1,scaled(1)),cv2.LINE_AA)
                 cv2.rectangle(canvas,(0,scaled(1275)),(round(q.width*(i+1)/frames),q.height-1),accent,-1)
                 encoder.stdin.write(canvas.tobytes());done+=1
             encoder.stdin.close()
@@ -169,21 +154,24 @@ def render_clip(directory, item, manifest, font_path, center_only=False, style='
         finally:
             for process in (decoder,encoder):
                 if process.poll() is None: process.terminate();process.wait()
+            decoder.stdout.close()
     temp.replace(out)
     report={'output_quality':q.report(),'rally_id':r['rally_id'],'rank':item['rank'],'path':str(out),'source_start_sec':start,
             'source_end_sec':end,'output_frames':done,'duration_sec':done/30,'crop_mode':mode,
             'silent_source':not source['has_audio'],'source_time_per_frame':'source_start_sec + frame / 30',
-            'follow_center_min':float(min(centers)), 'follow_center_max':float(max(centers))}
+            'follow_center_min':float(min(centers)), 'follow_center_max':float(max(centers)),
+            'view_layout':'single', 'simultaneous_views':1,
+            'detail_layout':{'top':detail_top,'height':picture_h,'overview_top':None,
+                             'source_height':detail_source_h,'source_crop_width':crop_width},
+            'camera_crop_left':crop_lefts}
     if style=='lively':
         report['art_theme']=art_theme
         report['title_template']=title_template
         report['design_suite']=design_suite
         report['header_background']='transparent'
-        report['detail_layout']={'top':detail_top,'height':picture_h,'overview_top':header_h+detail_h,
-                                 'source_height':detail_source_h,'source_crop_width':crop_width}
         # Independent verification can reconstruct the live picture behind the UI.
         report['header_source_samples']=[{'output_frame':i,'source_sec':start+i/30,
-            'crop_left':max(0,min(int(centers[i])-crop_width//2,w-crop_width))}
+            'crop_left':crop_lefts[i]}
             for i in sorted({min(15,frames-1),frames//2,max(0,frames-15)})]
     if 'sources' in manifest:
         report.update(source_id=r['source_id'],source_set=r['source_set'],source_path=source['path'],time_basis='source-local seconds')
@@ -229,6 +217,7 @@ def render(directory,font,style='classic',workers=1,art_theme=None,title_templat
     output=directory/f'top{len(clips)}.mp4'
     concatenate_segments(clips,output,quality)
     save_json(directory/'render_report.json',{'output_quality':q.report(),'output':str(output),'order':'countdown',
+        'view_layout':'single','simultaneous_views':1,
         'font_path':str(font),'font_validation':font_validation,
         'clips':clips,'expected_duration_sec':sum(r['duration_sec'] for r in clips)})
 

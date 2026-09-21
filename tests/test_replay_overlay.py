@@ -26,7 +26,9 @@ class ReplayOverlayTests(unittest.TestCase):
                 region=alpha.crop((22,124,387,194))
                 self.assertGreater(region.histogram()[0]/(region.width*region.height),.6)
                 self.assertEqual(alpha.crop((0,0,720,110)).getextrema(),(0,0))
-                self.assertEqual(alpha.getpixel((1,112)),255)  # Replay frame retained.
+                # Replay hints must not bring back a box or the former divider.
+                self.assertEqual(alpha.getpixel((1,112)),0)
+                self.assertEqual(alpha.crop((0,194,720,1280)).getextrema(),(0,0))
 
     def test_replay_keeps_text_and_only_local_dark_outlines(self):
         from PIL import Image
