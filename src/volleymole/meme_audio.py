@@ -234,7 +234,7 @@ def render(video, plan_path, output, *, audio_settings=None):
     return report
 
 
-def main(argv=None):
+def argument_parser():
     parser = argparse.ArgumentParser(description='给已有成片添加克制的本地梗配音，画面与时间线原样保留')
     parser.add_argument('--video', required=True, type=Path)
     parser.add_argument('--plan', required=True, type=Path)
@@ -245,6 +245,11 @@ def main(argv=None):
     parser.add_argument('--duck-db', type=float, help='配音期间原声增益，-12 至 0 dB；覆盖模板及计划')
     parser.add_argument('--audio-enabled', action=argparse.BooleanOptionalAction, default=None,
                         help='启用配音；--no-audio-enabled 保留完整原声')
+    return parser
+
+
+def main(argv=None):
+    parser = argument_parser()
     args = parser.parse_args(argv)
     from .templates import load_template
     settings = dict(load_template(args.template).get('audio', {})) if args.template else {}

@@ -442,10 +442,15 @@ def main(argv=None):
     print(f'VolleyMole 成片：{output}',flush=True)
 
 
-def verify_cli(argv=None):
+def verify_argument_parser():
     parser=argparse.ArgumentParser(description='Verify rendered output against source picture/audio')
     parser.add_argument('--run',type=Path,required=True)
     parser.add_argument('--style',choices=['classic','lively'],default='lively')
+    return parser
+
+
+def verify_cli(argv=None):
+    parser=verify_argument_parser()
     args=parser.parse_args(argv)
     directory=args.run.resolve()
     k=len(read_json(directory/'edit_decision.json')['selected'])

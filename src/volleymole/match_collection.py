@@ -232,7 +232,7 @@ def execute_match(args,day,sets):
         return result
 
 
-def main(argv=None):
+def match_argument_parser():
     parser=argument_parser();parser.prog='volleymole match'
     parser.description='按 年.月.日.局号 分组，各局独立分析，整场统一排名；默认十佳球'
     for action in parser._actions:
@@ -241,6 +241,11 @@ def main(argv=None):
     parser.add_argument('--date',help='仅处理指定日期，例如 2026.1.6 或 2026-01-06；省略则处理全部日期')
     parser.add_argument('--list',action='store_true',help='仅列出日期与局号，不运行推理或写文件')
     parser.set_defaults(top_k=10)
+    return parser
+
+
+def main(argv=None):
+    parser=match_argument_parser()
     args=parser.parse_args(argv)
     validate_event_arguments(args,parser)
     if args.video or args.evidence_cache or args.analytics_cache or args.tracking_cache:

@@ -178,7 +178,7 @@ class TemplateArgumentParser(argparse.ArgumentParser):
         return result
 
 
-def main(argv=None):
+def argument_parser():
     parser = argparse.ArgumentParser(description='导入、导出和查看成片模板；不运行推理或 API')
     parser.add_argument('--directory', type=Path, help='本地模板库，默认 ./templates 或 VOLLEYMOLE_TEMPLATES')
     commands = parser.add_subparsers(dest='command', required=True)
@@ -193,6 +193,11 @@ def main(argv=None):
     export.add_argument('--from-run', type=Path, help='已有运行目录，读取 run_config.json')
     export.add_argument('--name', help='新模板名称')
     export.add_argument('--output', type=Path, required=True)
+    return parser
+
+
+def main(argv=None):
+    parser = argument_parser()
     args = parser.parse_args(argv)
     directory = local_directory(args.directory)
     if args.command == 'list':

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#faf7f2">
+  <title>VolleyMole · 排球剪辑工作台</title>
+  <link rel="icon" href="/static/volleymole.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#app">跳到主要内容</a>
+  <div class="shell">
+    <div class="menu-shade" aria-hidden="true"></div>
+    <aside class="sidebar" id="navigation">
+      <!-- Original project artwork from assets/branding/volleymole.svg. -->
+      <a class="brand" href="#home" aria-label="VolleyMole 首页"><img src="/static/volleymole.svg" alt="VolleyMole" width="2048" height="558"><small>每个回合，都值得回放。</small></a>
+      <div class="nav-label">剪辑工作台</div>
+      <nav aria-label="主导航">
+        <a href="#home" data-nav="home"><span>◫</span>总览</a>
+        <a href="#create" data-nav="create"><span>＋</span>创建剪辑</a>
+        <a href="#jobs" data-nav="jobs"><span>◷</span>任务中心 <b id="queue-count"></b></a>
+        <a href="#library" data-nav="library"><span>▤</span>素材与成片</a>
+        <a href="#templates" data-nav="templates"><span>◈</span>成片模板</a>
+      </nav>
+      <div class="nav-label">更多工具</div>
+      <nav aria-label="工具导航">
+        <a href="#tools" data-nav="tools"><span>⌘</span>专业工具</a>
+        <a href="#resources" data-nav="resources"><span>▧</span>模型与素材</a>
+        <a href="#settings" data-nav="settings"><span>⚙</span>工作区设置</a>
+      </nav>
+      <div class="sidebar-bottom"><span class="status-dot"></span> 本地工作区<small id="workspace-label">正在连接…</small></div>
+    </aside>
+    <main>
+      <header class="topbar"><button class="icon-button mobile-menu" id="menu-toggle" aria-label="展开导航" aria-expanded="false" aria-controls="navigation">☰</button><span id="breadcrumb">工作台 / 总览</span><span class="local-pill"><i></i>本地工作台</span></header>
+      <div id="app" tabindex="-1"><div class="loading">正在打开工作台…</div></div>
+      <footer>VOLLEYMOLE <span>从完整回合，剪出赛场高光。</span></footer>
+    </main>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <dialog id="picker" aria-labelledby="picker-title"></dialog>
+  <dialog id="preview" aria-labelledby="preview-title"></dialog>
+  <input id="upload-input" type="file" multiple hidden>
+  <input id="template-import" type="file" accept=".json,application/json" hidden>
+</body>
+</html>

@@ -309,7 +309,7 @@ def run_review(directory, key, max_calls, *, request_fn=None):
         return plan
 
 
-def main(argv=None):
+def argument_parser():
     parser = argparse.ArgumentParser(description='大模型按梗条件判断配音，证据不足时留白')
     sub = parser.add_subparsers(dest='command', required=True)
     p = sub.add_parser('prepare', help='只抽帧和准备请求；不读密钥、不联网')
@@ -325,6 +325,11 @@ def main(argv=None):
     p.add_argument('--llm-config', type=Path, default=Path('llm_api.json'))
     p.add_argument('--max-calls', type=int, required=True)
     p.add_argument('--render-output', type=Path)
+    return parser
+
+
+def main(argv=None):
+    parser = argument_parser()
     args = parser.parse_args(argv)
     if args.command == 'prepare':
         result = prepare(args.manifest, args.run, endpoint=args.api_base, model=args.model, protocol=args.protocol,

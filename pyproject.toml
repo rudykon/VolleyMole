@@ -30,7 +30,7 @@ where = ["src"]
 namespaces = false
 
 [tool.setuptools.package-data]
-volleymole = ["*.json", "templates/*.json", "prompts/*.md", "assets/**/*", "licenses/*"]
+volleymole = ["*.json", "templates/*.json", "prompts/*.md", "assets/**/*", "licenses/*", "web/static/*", "web/static/previews/*"]
 
 [tool.setuptools.exclude-package-data]
 volleymole = ["assets/**/*.png", "assets/**/*.ttf", "assets/**/*.otf"]

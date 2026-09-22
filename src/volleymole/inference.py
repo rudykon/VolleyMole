@@ -89,7 +89,7 @@ def player(args, registry, device):
     return ['person', 'ocr_recognizer', 'ocr_detector']
 
 
-def main(argv=None):
+def argument_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--kind', choices=['analytics','tracking','player','shared'], required=True)
     parser.add_argument('--video', type=Path, required=True)
@@ -107,6 +107,11 @@ def main(argv=None):
     parser.add_argument('--pipeline-depth', type=int, choices=range(1,5), default=1)
     parser.add_argument('--auxiliary-device')
     parser.add_argument('--vball-engine', choices=['ort','ort-bound'], default='ort')
+    return parser
+
+
+def main(argv=None):
+    parser = argument_parser()
     args = parser.parse_args(argv)
     if args.kind != 'shared' and (args.pipeline_depth != 1 or args.auxiliary_device or args.vball_engine != 'ort'):
         parser.error('Performance options require --kind shared')

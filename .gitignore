@@ -18,6 +18,7 @@ runs/
 outputs/
 reports/
 .local/
+.playwright-mcp/
 # Personal presets; built-in presets under src/ are published.
 /templates/
 
@@ -75,6 +76,7 @@ build/
 
 # Small documentation previews are published with the source.
 !docs/images/**/*.png
+!src/volleymole/web/static/previews/*.png
 
 # Editor / OS files
 .DS_Store

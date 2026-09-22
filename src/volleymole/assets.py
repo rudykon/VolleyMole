@@ -160,7 +160,7 @@ def install(archive=None, directory=None, manifest=None):
     return {**verify(target, data), 'reused': False}
 
 
-def main(argv=None):
+def argument_parser():
     parser = argparse.ArgumentParser(description='安装与校验固定版本的插画、字体和转场素材；模型与录像单独管理')
     commands = parser.add_subparsers(dest='command', required=True)
     for name in ('fetch', 'verify', 'import-file'):
@@ -168,6 +168,11 @@ def main(argv=None):
         command.add_argument('--directory', type=Path, help='自定义素材根目录；运行时设置 VOLLEYMOLE_ASSETS 为同一路径')
         if name == 'import-file':
             command.add_argument('archive', type=Path, help='从 Release 手动下载的完整 ZIP')
+    return parser
+
+
+def main(argv=None):
+    parser = argument_parser()
     args = parser.parse_args(argv)
     if args.command == 'verify':
         result = verify(args.directory)

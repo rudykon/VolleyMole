@@ -100,6 +100,7 @@ jobs:
             test_svhighlights_eval \
             test_temporal_understanding \
             test_templates \
+            test_web \
             test_video_decode \
             test_volleyball_action_eval \
             test_volleyball_data_splits

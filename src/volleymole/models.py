@@ -126,7 +126,7 @@ class ModelRegistry:
         return self.verify(names)
 
 
-def main(argv=None):
+def argument_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--directory', type=Path)
     sub = parser.add_subparsers(dest='command', required=True)
@@ -136,6 +136,11 @@ def main(argv=None):
     p = sub.add_parser('import-file')
     p.add_argument('name')
     p.add_argument('source', type=Path)
+    return parser
+
+
+def main(argv=None):
+    parser = argument_parser()
     args = parser.parse_args(argv)
     registry = ModelRegistry(args.directory)
     if args.command == 'import-file':

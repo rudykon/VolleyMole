@@ -319,7 +319,7 @@ def load_reviewed_manifest(directory, expected_binding=None):
     return manifest, identity(path)
 
 
-def main(argv=None):
+def argument_parser():
     parser = argparse.ArgumentParser(description='对已有剪辑单自动寻找精彩动作并复核慢回放边界，不改选球排名')
     parser.add_argument('--run', type=Path, required=True)
     parser.add_argument('--llm-config', type=Path, default=ROOT/'llm_api.json')
@@ -331,6 +331,11 @@ def main(argv=None):
     parser.add_argument('--semantic-reasoning-effort', choices=('none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'))
     parser.add_argument('--semantic-retries', type=int, choices=range(3), default=1)
     add_arguments(parser); parser.set_defaults(replay_review='required', style='lively', ranker='auto')
+    return parser
+
+
+def main(argv=None):
+    parser = argument_parser()
     args = parser.parse_args(argv)
     validate_arguments(args)
     if not math.isfinite(args.api_timeout) or args.api_timeout <= 0 or not 256 <= args.semantic_max_tokens <= 16384:
