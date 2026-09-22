@@ -16,6 +16,10 @@ data/
 models/
 runs/
 outputs/
+reports/
+.local/
+# Personal presets; built-in presets under src/ are published.
+/templates/
 
 # Python environments, build output and caches
 .venv/
@@ -51,6 +55,23 @@ build/
 *.avi
 *.mkv
 *.webm
+*.m4v
+*.mts
+*.m2ts
+*.wav
+*.mp3
+*.m4a
+*.aac
+*.flac
+*.ogg
+*.log
+*.jsonl
+*.tmp
+*.partial
+*.tar
+*.tar.gz
+*.tgz
+*.7z
 
 # Small documentation previews are published with the source.
 !docs/images/**/*.png

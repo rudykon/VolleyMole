@@ -78,6 +78,23 @@ class MemeAudioTests(unittest.TestCase):
             with self.subTest(plan=plan), self.assertRaises(ValueError):
                 validate_plan(plan, self.root, 3.)
 
+    def test_template_mixes_levels_and_disabled_mode_preserves_original_bytes(self):
+        plan = self.root / 'plan.json'
+        plan.write_text(json.dumps(self.plan))
+        settings = {'enabled': True, 'max_cues': 2, 'rms_db': -28, 'duck_db': -6}
+        output = self.root / 'template.mp4'
+        report = render(self.video, plan, output, audio_settings=settings)
+        self.assertEqual(report['audio_settings'], settings)
+        self.assertTrue(all(c['rms_db'] == -28 and c['duck_db'] == -6 for c in report['cues']))
+        self.assertEqual(video_signature(output), video_signature(self.video))
+        unchanged = self.root / 'disabled.mp4'
+        report = render(self.video, plan, unchanged, audio_settings={'enabled': False})
+        self.assertEqual(report['cue_count'], 0)
+        self.assertEqual(unchanged.read_bytes(), self.video.read_bytes())
+        self.assertEqual(json.loads(plan.read_text()), self.plan)
+        with self.assertRaisesRegex(ValueError, 'density'):
+            render(self.video, plan, self.root / 'too-many.mp4', audio_settings={'max_cues': 1})
+
     def test_loud_cue_reduces_gain_instead_of_clipping_and_fades_to_original(self):
         background = np.full((RATE, 2), .8, dtype=np.float32)
         sound = np.zeros_like(background)

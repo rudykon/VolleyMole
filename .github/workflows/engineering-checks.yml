@@ -71,6 +71,7 @@ jobs:
             test_match_collection \
             test_meme_audio \
             test_meme_director \
+            test_meme_scheduler \
             test_performance \
             test_pipeline \
             test_probe_event_models \
@@ -98,6 +99,7 @@ jobs:
             test_sound_configuration \
             test_svhighlights_eval \
             test_temporal_understanding \
+            test_templates \
             test_video_decode \
             test_volleyball_action_eval \
             test_volleyball_data_splits

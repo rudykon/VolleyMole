@@ -97,6 +97,9 @@ def _validate_automatic_result(directory, cache, row, item, source, report, moti
 
 
 def add_arguments(parser):
+    parser.add_argument('--replays', action=argparse.BooleanOptionalAction, default=True,
+                        help='保留慢回放；--no-replays 关闭慢回放和自动复核')
+    parser.add_argument('--replay-speed', type=float, default=2/3, help='慢回放速度，0.5–1.0；默认 2/3 倍速')
     parser.add_argument('--replay-review', choices=('auto', 'required', 'off'), default='auto',
         help='精彩慢回放：auto 自动时序复核；required 复核未完成则停止；off 保留本地动作候选。rules 排名默认不发请求')
     parser.add_argument('--replay-review-timeout', type=float, default=900., help='入选回合慢回放复核总预算（秒）')
@@ -109,6 +112,11 @@ def add_arguments(parser):
 
 
 def validate_arguments(args):
+    speed = getattr(args, 'replay_speed', 2/3)
+    if isinstance(speed, bool) or not math.isfinite(speed) or not .5 <= speed <= 1:
+        raise ValueError('replay_speed 必须在 0.5–1.0 之间')
+    if not getattr(args, 'replays', True) and args.replay_review == 'required':
+        raise ValueError('--no-replays 不能与 --replay-review required 同时使用')
     for k in ('replay_review_timeout', 'replay_scan_fps', 'replay_review_fps'):
         v = getattr(args, k)
         if not math.isfinite(v) or v <= 0:
@@ -131,8 +139,9 @@ def settings_from(args):
 
 
 def config_from(args):
-    return {k:getattr(args,k) for k in ('replay_review','replay_review_timeout','replay_review_concurrency',
-        'replay_scan_fps','replay_review_fps','replay_review_width','replay_max_expansions','replace_replay_reviews')}
+    return {**{k:getattr(args,k) for k in ('replay_review','replay_review_timeout','replay_review_concurrency',
+        'replay_scan_fps','replay_review_fps','replay_review_width','replay_max_expansions','replace_replay_reviews')},
+        'replays':getattr(args,'replays',True),'replay_speed':getattr(args,'replay_speed',2/3)}
 
 
 def run_review(directory, args):
@@ -141,7 +150,7 @@ def run_review(directory, args):
     mode = getattr(args, 'replay_review', 'auto'); settings = settings_from(args)
     binding = dict(manifest_sha256=digest(directory/'match_manifest.json'), decision_sha256=digest(directory/'edit_decision.json'))
     applicable = args.style == 'lively' and decision.get('collection', 'highlights') == 'highlights'
-    disabled = (mode == 'off' or not applicable or (args.ranker == 'rules' and mode == 'auto'))
+    disabled = (not getattr(args, 'replays', True) or mode == 'off' or not applicable or (args.ranker == 'rules' and mode == 'auto'))
     ready = bool(settings['endpoint'] and settings['model'] and settings['key'])
     by_id = {r['rally_id']: r for r in manifest['rallies']}
     existing = bool(decision['selected']) and not getattr(args, 'replace_replay_reviews', False) and all(

@@ -47,6 +47,32 @@ class PresentationTests(unittest.TestCase):
             self.assertAlmostEqual(window['source_start_sec'],10.)
             self.assertAlmostEqual(window['source_end_sec'],11.4)
 
+    def test_replay_speed_and_disable_preserve_full_rally_source_windows(self):
+        from volleymole.presentation import validate_replay_evidence
+        decision, original = self.timeline(5)
+        for enabled, speed in ((True, .5), (True, 1.), (False, .5)):
+            rows = build_timeline(decision, self.manifest, replays=enabled, replay_speed=speed)
+            for row in rows:
+                row['path'] = original['segments'][0]['path']
+            report = {'segments': rows, 'replays': enabled, 'replay_speed': speed,
+                      'replay_policy_version': 2,
+                      'expected_duration_sec': sum(r['output_frames'] for r in rows)/30}
+            validate_timeline(report, decision)
+            validate_replay_evidence(report, decision, self.manifest)
+            replays = [r for r in rows if r['kind'] == 'replay']
+            self.assertEqual(len(replays), 5 if enabled else 0)
+            self.assertTrue(all(r['playback_rate'] == speed for r in replays))
+            self.assertEqual([(r['source_start_sec'], r['source_end_sec']) for r in rows if r['kind'] == 'rally'],
+                             [(r['source_start_sec'], r['source_end_sec']) for r in original['segments'] if r['kind'] == 'rally'])
+            if enabled:
+                self.assertTrue(all(r['duration_sec'] == 4/speed for r in replays))
+                replays[0]['playback_rate'] = .75
+                with self.assertRaises(ValueError):
+                    validate_replay_evidence(report, decision, self.manifest)
+        for speed in (0, .25, 2, float('nan'), True):
+            with self.assertRaises(ValueError):
+                build_timeline(decision, self.manifest, replay_speed=speed)
+
     def test_transition_styles_preserve_timing_and_are_audited(self):
         from volleymole.transitions import STYLE_IDS
         decision, original = self.timeline(5)

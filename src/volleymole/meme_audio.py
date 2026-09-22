@@ -136,7 +136,20 @@ def mix_cue(background, sound, rms_db, duck_db):
                    'mixed_peak_dbfs': 20 * math.log10(max(float(np.max(np.abs(mixed))), 1e-12))}
 
 
-def render(video, plan_path, output):
+def apply_audio_settings(plan, settings):
+    from .templates import validate_audio
+    validate_audio(settings)
+    result = {**plan, 'cues': [dict(cue) for cue in plan['cues']]}
+    if 'max_cues' in settings:
+        result['max_cues'] = settings['max_cues']
+    if settings.get('enabled') is False:
+        result['cues'] = []
+    for cue in result['cues']:
+        cue.update({key: settings[key] for key in ('rms_db', 'duck_db') if key in settings})
+    return result
+
+
+def render(video, plan_path, output, *, audio_settings=None):
     video, plan_path, output = map(lambda p: Path(p).resolve(), (video, plan_path, output))
     report_path = output.with_suffix('.audio.json')
     if output.suffix.lower() != '.mp4':
@@ -152,6 +165,8 @@ def render(video, plan_path, output):
         raise ValueError('Input video and audio must start at time zero')
     duration = float(int(picture['duration_ts']) * Fraction(picture['time_base']))
     plan = read_json(plan_path)
+    if audio_settings is not None:
+        plan = apply_audio_settings(plan, audio_settings)
     cues = validate_plan(plan, plan_path.parent, duration)
     samples = round(duration * RATE)
     signature = video_signature(video)
@@ -162,7 +177,7 @@ def render(video, plan_path, output):
                   'output': str(output), 'output_sha256': digest(video),
                   'video_unchanged': True, 'video_signature': signature,
                   'duration_sec': duration, 'cue_count': 0, 'cues': [],
-                  'audio_mode': 'original_unchanged', 'new_model_calls': 0,
+                  'audio_mode': 'original_unchanged', 'audio_settings': audio_settings, 'new_model_calls': 0,
                   'selection_mode': plan.get('selection_mode', 'explicit_editorial_times')}
         # A legitimate model abstention preserves both original audio and video.
         with tempfile.TemporaryDirectory(prefix='meme-audio-', dir=output.parent) as temp:
@@ -212,7 +227,7 @@ def render(video, plan_path, output):
                   'output': str(output), 'output_sha256': digest(candidate),
                   'video_unchanged': True, 'video_signature': signature,
                   'duration_sec': duration, 'cue_count': len(cues), 'cues': observations,
-                  'audio_mode': 'local_cues_with_short_ducking', 'new_model_calls': 0,
+                  'audio_mode': 'local_cues_with_short_ducking', 'audio_settings': audio_settings, 'new_model_calls': 0,
                   'selection_mode': plan.get('selection_mode', 'explicit_editorial_times')}
         candidate.replace(output)
         save_json(report_path, report)
@@ -224,8 +239,21 @@ def main(argv=None):
     parser.add_argument('--video', required=True, type=Path)
     parser.add_argument('--plan', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--template', help='读取与剪辑共用的模板 audio 设置')
+    parser.add_argument('--max-cues', type=int, help='配音数量上限；覆盖模板')
+    parser.add_argument('--rms-db', type=float, help='配音电平，-36 至 -14 dB；覆盖模板及计划')
+    parser.add_argument('--duck-db', type=float, help='配音期间原声增益，-12 至 0 dB；覆盖模板及计划')
+    parser.add_argument('--audio-enabled', action=argparse.BooleanOptionalAction, default=None,
+                        help='启用配音；--no-audio-enabled 保留完整原声')
     args = parser.parse_args(argv)
-    result = render(args.video, args.plan, args.output)
+    from .templates import load_template
+    settings = dict(load_template(args.template).get('audio', {})) if args.template else {}
+    for key in ('max_cues', 'rms_db', 'duck_db'):
+        if getattr(args, key) is not None:
+            settings[key] = getattr(args, key)
+    if args.audio_enabled is not None:
+        settings['enabled'] = args.audio_enabled
+    result = render(args.video, args.plan, args.output, audio_settings=settings or None)
     print(json.dumps({'output': result['output'], 'cue_count': result['cue_count'],
                       'video_unchanged': result['video_unchanged']}, ensure_ascii=False))
 

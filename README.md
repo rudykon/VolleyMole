@@ -1,311 +1,107 @@
 <div align="center">
-
-  <img src="src/volleymole/assets/branding/volleymole.svg" alt="VolleyMole" width="540">
-  <h1>VolleyMole · 排球高光自动剪辑</h1>
-  <p>把一整场日常排球比赛，剪成有回合、有排名、有原声的竖屏五佳球或十佳球。</p>
-  <p>Python 3.12 · Linux x86-64 · 单卡 / 四卡 CUDA · H.264 + AAC</p>
-  <p><a href="https://github.com/rudykon/VolleyMole/actions/workflows/engineering-checks.yml"><img src="https://github.com/rudykon/VolleyMole/actions/workflows/engineering-checks.yml/badge.svg" alt="Engineering checks"></a></p>
-  <p><a href="#快速开始">快速开始</a> · <a href="#五套插画风格">插画风格</a> · <a href="#四卡加速">四卡加速</a> · <a href="#文档与开发">文档</a> · <a href="#致谢与参考">致谢</a></p>
+  <img src="src/volleymole/assets/branding/volleymole.svg" alt="VolleyMole" width="400">
+  <h1>VolleyMole · 排球视频自动剪辑</h1>
+  <p>从单机位比赛录像生成竖屏五佳球、十佳球，保留完整回合与现场原声。</p>
 </div>
 
-> 默认精彩集锦已恢复完整回合剪辑：候选预筛 → 可选语义排序 → 失败时明确记录规则兜底 → 渲染和源内容校验。`--analysis-mode events` 显式启用事件理解；`--collection both|bloopers` 也自动选择事件路线。双榜能力和限制见 [事件理解与双榜](docs/事件理解与双榜.md)。
-
-声音模型可用 `.venv/bin/python scripts/install_sound_model.py` 安装作者发布的 PANNs 事件检测权重，安装后在事件路线自动启用。无需自行标注数据。部署见[声音模型部署](docs/声音模型部署.md)，已有标签、实测结果与未验证项见[公开数据验收记录](docs/公开数据验收记录.md)。
-
-梗配音默认改用低费用开源视觉模型 `qwen3.5-35b-a3b`，不自动回退到 Gemini。廉价模型的动作判断仍需复核；低费用不等于跨视频质量已经验收通过。见[梗使用条件与 API 导演](docs/梗使用条件与API导演.md)。
-
-真实原标注数据上的动作定位改进、可选本地时序模型接入及当前效果边界见[动作准确性改进与五大囧基准](docs/动作准确性改进与五大囧基准.md)。[五大囧人工评分基准](docs/五大囧人工评分基准.md)已提供匿名离线评分页面与指标工具；目前没有新增真人评分。
-
-五大囧现优先参考与事件关联的笑声，普通发球/扣球失误也可因相关笑声入选。本地8处候选的原声片段、复核结果与限制见[8个声音候选复核](docs/8个声音候选复核.md)。
-
----
-
-## 从比赛录像到高光成片
-
-VolleyMole 面向单机位排球录像：在本地识别比赛状态、动作、人物和球轨迹，默认从完整回合中生成五佳球或十佳球，也可选择全场事件理解生成竞技与趣味双榜。默认输出 **1080 × 1920、30 fps** 的竖屏视频，支持 720p、1440p 和 4K 画质选项。
-
-```text
-默认：比赛录像 → 本地完整回合 → 候选预筛／语义排序（可规则兜底）→ 渲染与校验
-可选：比赛录像 → 本地分析＋全场粗读 → 事件复核与双榜评分 → 渲染与校验
-```
-
-| 能力 | 说明 |
-| --- | --- |
-| 完整回合 | 保留检测到的回合及前后上下文，记录边界与遮挡的不确定性 |
-| 跟球构图 | 球轨迹引导单画面竖屏裁切，正常回合与慢放均无分屏小窗 |
-| 活力版呈现 | 5 秒快切片头、中文倒计时、插画转场、精彩动作独立核验与完整慢回放；可要求每个入选回合都通过后再成片。[回放流程与验证范围](docs/慢回放选点与完整性.md) |
-| 排名与路线 | 默认完整回合语义排序并保留规则兜底；显式纯规则模式无需 API；事件双榜单独选择 |
-| 球员关注 | 可按球衣号码记录球员出现证据，OCR 按需启动 |
-| 缓存与恢复 | 按素材、模型和配置校验分析缓存，支持从排名或渲染阶段重做 |
-| 四卡流水线 | 支持跨批推理、辅助检测分卡及独立回合并行渲染 |
-
-<p align="center">
-  <img src="docs/images/assets/illustrated/volley_receive.png" alt="接球主题插画" width="150">
-  <img src="docs/images/assets/illustrated/volley_set.png" alt="二传主题插画" width="150">
-  <img src="docs/images/assets/illustrated/volley_spike.png" alt="扣球主题插画" width="150">
-  <br><sub>项目内置的装饰插画；不是比赛检测结果或成片截图。</sub>
-</p>
+支持多局合并排名、跟球裁切、慢回放、中英标题和五套视觉设计。默认输出 **1080 × 1920 / 30 fps / H.264 + AAC**，可选 720p、1440p、2160p。分析结果支持缓存与断点恢复；事件双榜和梗配音可单独启用。
 
 ## 快速开始
 
-已完成的成片可选加少量本地梗配音，默认最多两处，保持视频画面和时间线不变。用法见[克制梗配音](docs/克制梗配音.md)。
-
-梗的条件及模型选择入口见[梗使用条件与 API 导演](docs/梗使用条件与API导演.md)。最新四球 API 请求均已完整返回，配音判断仍有未通过项；实际范围与限制见[修复复测记录](reports/API调用修复与复测_20260920.md)。
-
-**环境要求**：Linux x86-64、Python 3.12、`uv`、系统可执行的 `ffmpeg` / `ffprobe`。GPU 推理还需要兼容 CUDA 12.8 的 NVIDIA 驱动；项目不会安装或修改驱动。当前依赖锁包含 GPU 库，CPU 运行也会安装这套依赖。
-
-### 1. 安装
+环境：Linux x86-64、Python 3.12、[uv](https://docs.astral.sh/uv/)、FFmpeg / FFprobe。GPU 运行需要兼容 CUDA 12.8 的驱动；当前依赖锁包含 GPU 库。
 
 ```bash
 git clone https://github.com/rudykon/VolleyMole.git
 cd VolleyMole
 uv sync --locked
-.venv/bin/volleymole --help
+source .venv/bin/activate
+
+# 下载并校验模型与视觉素材，之后可离线使用
+volleymole models --directory models fetch
+volleymole assets fetch
+
+# 单视频五佳球；规则排名无需 API
+volleymole run --video data/match.mp4 --ranker rules \
+  --template matchday --output runs/my-match
 ```
 
-实现已统一到 `src/volleymole`，无需额外检出上游项目或准备 `tools/` 文件夹。
-
-### 2. 安装完整视觉素材（约 90 MiB）
+整场多局录像按 `年.月.日.局号.mp4` 命名，例如 `2026.9.15.1.mp4`：
 
 ```bash
-.venv/bin/volleymole assets fetch
-.venv/bin/volleymole assets verify
+volleymole match --input-dir data/matches --list
+volleymole match --input-dir data/matches --date 2026-09-15 \
+  --ranker rules --template atelier --output runs/matches
 ```
 
-插画、字体、品牌和转场统一从 [assets-v1 Release](https://github.com/rudykon/VolleyMole/releases/tag/assets-v1) 获取，按固定大小和 SHA-256 校验后安装到用户缓存目录。源码和 wheel 保持轻量；下载一次后可离线使用。自定义目录、手动下载和校验说明见[素材安装与分发](docs/素材安装与分发.md)。README 中的预览图随仓库提供。
+`run` 默认五佳，`match` 默认十佳；使用 `--top-k 5` 或 `--top-k 10` 调整。输出目录保存成片、剪辑单和验证报告。更多安装说明见[安装与运行](docs/统一包安装与运行.md)。
 
-### 3. 获取模型
+## 自己的成片模板
+
+模板使用 JSON 保存风格、语言、转场、画质、慢回放及配音设置，可以直接读取文件，也可以导入后按名称切换。
 
 ```bash
-.venv/bin/volleymole models --directory models fetch
-.venv/bin/volleymole models --directory models verify
+# 查看五套内置模板
+volleymole templates list
+
+# 导出后按自己的习惯编辑
+volleymole templates export matchday --name my-team --output my-team.json
+
+# 导入本地 templates/，随后按名称使用
+volleymole templates import my-team.json
+volleymole run --video data/match.mp4 --ranker rules --template my-team
+
+# 也可直接使用 JSON，临时覆盖语言或画质
+volleymole run --video data/match.mp4 --ranker rules \
+  --template ./my-team.json --design-language en --quality 1440p
 ```
 
-模型下载后按固定大小与 SHA-256 校验，随后可在本地推理。下载地址可能受网络限制；也支持导入已取得的对应权重，见 [模型安装说明](docs/统一包安装与运行.md)。仓库不包含模型权重或比赛录像。
+| 模板 | 视觉设计 |
+| --- | --- |
+| `matchday` | 赤线竞技 |
+| `atelier` | 纸上球场 |
+| `sumi` | 墨间回合 |
+| `aurora` | 极光棱镜 |
+| `archive` | 胶片纪事 |
 
-### 4. 放入录像并运行
+<p>
+  <img src="docs/images/design-suites/matchday.png" width="150" alt="赤线竞技">
+  <img src="docs/images/design-suites/atelier.png" width="150" alt="纸上球场">
+  <img src="docs/images/design-suites/aurora.png" width="150" alt="极光棱镜">
+</p>
 
-将自己的比赛录像放在 `data/match.mp4`，运行无需大模型 API 的五佳球剪辑：
-
-```bash
-.venv/bin/volleymole run \
-  --video data/match.mp4 --top-k 5 --ranker rules --device cuda:0
-```
-
-默认成片：`runs/match-top5/top5_lively.mp4`。没有可用 GPU 时可改用 `--device cpu`，推理会更慢。
-
-## 整场十佳球：按日期合并多局（常规用法）
-
-文件命名为 `年.月.日.局号`，例如 `2026.1.6.1.mp4`～`2026.1.6.4.mp4`，会识别为同一场比赛的四局。各局独立分析，再从**整场所有有效回合统一选出十佳球**，不是把各局集锦拼在一起。
-
-```bash
-# 先查看分组，不推理、不生成文件
-.venv/bin/volleymole match --input-dir data/样例视频 --list
-
-# 指定一场，默认完整回合十佳球、1080p、中文；配置 API 则尝试语义排序，否则明确使用规则排序
-.venv/bin/volleymole match --input-dir data/样例视频 --date 2026.1.6 \
-  --devices cuda:0,cuda:1,cuda:2,cuda:3 \
-  --pipeline-depth 2 --auxiliary-device cuda:0 --vball-engine ort-bound \
-  --render-workers 2 --design-suite matchday
-
-# 省略 --date：依次为目录内每个日期生成一条整场十佳球
-.venv/bin/volleymole match --input-dir data/样例视频 --device cuda:0
-```
-
-默认输出为 `runs/matches/2026-01-06-top10/top10_lively.mp4`。`--analysis-mode auto`（默认）在精彩榜选择完整回合路线，在趣味/双榜选择事件路线；`--analysis-mode rallies|events` 可显式指定。事件路线输出到 `collections/highlights/`、`collections/bloopers/`。`--output` 指定所有场次的父目录；英文增加 `--design-language en`，画质和五套模板选项保持一致。原有 `run --video ...` 仍是单视频用法，默认五佳球。
-
-当前样例目录分为 **2026-01-06（4 局）、2026-09-02（3 局）、2026-09-08（3 局）**。局号按数字排序；重复局号、无效日期或不符合命名格式的视频会报错，缺局会提示。更多规则与来源追溯见 [整场多局十佳球](docs/整场多局十佳球.md)。
-
-事件路线的 `--analysis-timeout 1800` 为每局独立预算，默认粗读最多使用 60%，至少 40% 留给复核（`--review-budget-fraction 0.4`）。等待本地回合清单不会消耗复核保留时间。任何一局事件分析未完成时，汇总标记 `analysis_incomplete`；零段且分析未完成不能作为“整场无精彩素材”的结论。默认回合路线不启动全场事件请求，规则兜底会记录 `ranking_mode=rules_fallback`，不冒充语义识别成功。
-
-## 四卡加速
-
-以下配置已在四张 RTX 3090 上完成整场实测：
-
-```bash
-.venv/bin/volleymole run \
-  --video data/match.mp4 --top-k 5 --ranker rules \
-  --devices cuda:0,cuda:1,cuda:2,cuda:3 \
-  --pipeline-depth 2 --auxiliary-device cuda:0 \
-  --vball-engine ort-bound --render-workers 2
-```
-
-四张卡分别负责状态、动作、人物和球轨迹；此命令把辅助球检测分配到 GPU 0。`--devices` 不可与 `--device` 同时使用。渲染仍用 CPU/x264；`--render-workers 2` 并行制作独立回合。
-
-**本机单次实测**：31 分 55 秒原片 → 2 分 50 秒成片，从新鲜四卡分析到验证共 **10 分 38 秒**。检测证据与基线一致；相同呈现代码下，并行渲染与串行渲染的成片逐字节一致。此结果为规则五佳、未开启号码 OCR，不代表其他硬件或 API 模式的耗时保证。分卡与后端收益随负载变化，详见 [性能优化与验证](docs/性能优化与验证.md)。
+使用 `design_suite: "custom"` 可自由组合插画、标题和转场。配音仍是成片后的独立步骤，同一份模板通过 `meme-audio --template my-team` 生效。完整格式、优先级和命令见[自定义成片模板](docs/自定义成片模板.md)。
 
 ## 常用选项
 
-成片画质通过 `--quality` 选择，适用于普通版和所有视觉套装：
-
-| 参数 | 竖屏分辨率 | H.264 CRF | 用途 |
-| --- | --- | --- | --- |
-| `--quality 720p` | 720 × 1280 | 23 | 快速试剪、较小文件 |
-| `--quality 1080p`（默认） | 1080 × 1920 | 20 | 日常发布 |
-| `--quality 1440p` | 1440 × 2560 | 18 | 更高分辨率、更低压缩 |
-| `--quality 2160p` | 2160 × 3840 | 17 | 4K 交付，耗时和内存需求最高 |
-
-例如在原有运行命令后增加 `--quality 1440p`。切换画质会重新渲染和校验，已缓存的分析、追踪和排名可继续复用。帧率保持 30 fps，音频保持 AAC 192 kbps，剪辑时间线不变。
-
-比赛画面直接从原片生成目标尺寸；更高档位无法补回原片缺失的细节。现有标题、插图和覆盖层仍按 720p 设计画布高质量缩放，并非原生 4K 字体/插画素材。历史预览样片仍为 720p，已有成片不会自动改写。
-
-| 需求 | 参数 |
+| 需求 | 参数 / 入口 |
 | --- | --- |
-| 十佳球 | `--top-k 10` |
-| 关注 12 号球员 | `--focus-player 12` |
-| 经典呈现 | `--style classic`，默认 `lively` |
-| 切换插画套装 | `--art-theme manga / clay / papercut / ink / retro`（任选其一） |
-| 中文 / 英文标题 | `--title-template editorial-zh` / `editorial-en`；另有竞技、电影、贴纸、极简四组 |
-| 五套动画转场 | `--transition-style velocity / paper / ink / prism / film`（任选其一） |
-| 一键完整设计 | `--design-suite matchday / atelier / sumi / aurora / archive`；英文增加 `--design-language en` |
-| 指定输出目录 | `--output runs/my-match` |
-| 只分析到回合清单 | `--stop-after manifest` |
-| 重做排名 / 渲染 | `--rerun-from rank` / `--rerun-from render` |
-| 测量新鲜推理 | `--no-analysis-cache`，平时可复用缓存 |
-| 查看全部参数 | `.venv/bin/volleymole run --help` |
+| 纯本地规则排名 | `--ranker rules` |
+| 语义排名 | 复制 `llm_api.example.json` 为 `llm_api.json`，配置 API 后使用 `--ranker auto` |
+| 竞技与趣味双榜 | `--collection both --analysis-mode events --ranker auto` |
+| 指定单卡 | `--device cuda:0` |
+| 四卡并行 | `--devices cuda:0,cuda:1,cuda:2,cuda:3 --pipeline-depth 2` |
+| 只重做呈现 | 原命令保留输出目录，加 `--rerun-from render` |
+| 要求慢回放全部复核通过 | `--replay-review required`，需要已配置视觉 API |
+| 添加本地配音 | `volleymole meme-audio --help` |
+| 查看全部参数 | `volleymole run --help` / `volleymole match --help` |
 
-## 五套完整视觉方案
+语义模式会向配置的服务发送抽样画面，部分事件模式还使用音频。规则排名可离线运行；语义排名失败会记录规则兜底。检测、动作判断与自动配音仍可能出错，发布前请检查成片。详见[事件双榜](docs/事件理解与双榜.md)、[慢回放](docs/慢回放选点与完整性.md)与[配音](docs/克制梗配音.md)。
 
-推荐从完整套装开始：**赤线竞技、纸上球场、墨间回合、极光棱镜、胶片纪事**。标题、插图、配色、转场、比赛角标、回放提示和动画节奏统一设计；每套支持中文与英文。极光棱镜使用新生成的透明玻璃排球，其他套装保留原始插图并重新编排。
-
-```bash
-# 在原运行命令中增加一个选项，整套启用
---design-suite matchday
-
-# 英文玻璃视觉
---design-suite aurora --design-language en
-
-# 无需录像、GPU 或 API，生成五套双语动画预览
-.venv/bin/python scripts/preview_design_suites.py --output outputs/my-design-suites
-
-# 仅生成五套英文模板预览（1080p）
-.venv/bin/python scripts/preview_design_suites.py --language en --output outputs/my-english-suites
-```
-
-<p>
-  <img src="docs/images/design-suites/matchday.png" width="160" alt="赤线竞技完整套装">
-  <img src="docs/images/design-suites/atelier.png" width="160" alt="纸上球场完整套装">
-  <img src="docs/images/design-suites/aurora.png" width="160" alt="极光棱镜完整套装">
-</p>
-
-套装统一控制下方三个单项；默认 `custom` 保留自由搭配。[查看五套设计、动画原则与使用指南](docs/完整视觉套装指南.md)。
-
-## 五套插画风格
-
-新增 **5 套 × 7 张 = 35 张** Codex 内置生图装饰素材，原版手绘仍保留为默认风格。每套都有排球、低姿救球、二传、飞扑、接球、扣球和空白排名横幅，均为透明 PNG，安装后可离线使用。
-
-| 热血漫画 | 立体黏土 | 层叠剪纸 | 东方水墨 | 复古丝网 |
-| :---: | :---: | :---: | :---: | :---: |
-| <img src="docs/images/assets/illustrated/themes/manga/volley_spike.png" width="125" alt="热血漫画扣球插画"> | <img src="docs/images/assets/illustrated/themes/clay/volley_spike.png" width="125" alt="立体黏土扣球插画"> | <img src="docs/images/assets/illustrated/themes/papercut/volley_spike.png" width="125" alt="层叠剪纸扣球插画"> | <img src="docs/images/assets/illustrated/themes/ink/volley_spike.png" width="125" alt="东方水墨扣球插画"> | <img src="docs/images/assets/illustrated/themes/retro/volley_spike.png" width="125" alt="复古丝网扣球插画"> |
-| `manga` | `clay` | `papercut` | `ink` | `retro` |
-
-```bash
-.venv/bin/volleymole run \
-  --video data/match.mp4 --top-k 5 --ranker rules --device cuda:0 \
-  --style lively --art-theme clay --output runs/match-clay
-```
-
-插画、排名横幅、标题卡配色、片头角标和回放强调色一起切换；比赛原片不做风格化重绘，检测、排名、分辨率、帧率和编码画质参数不因套装而改变。中文名次由程序排版，五佳与十佳共用素材。完整图集、只重做渲染和离线预览方法见 [插画风格指南](docs/插画风格指南.md)。
-
-## 中英双语标题设计
-
-新增 **五组设计 × 中英双语 = 十套标题模板**：刊物编辑 `editorial`、竞技速报 `arena`、电影片名 `cinema`、潮流贴纸 `pop`、极简栏目 `minimal`。通过 `-zh` / `-en` 选择语言，与插画套装独立组合。英文版使用独立英文字体和断行，并同步切换排名、片头、回放与页脚。
-
-```bash
---art-theme papercut --title-template editorial-zh
---art-theme manga --title-template arena-en
-```
-
-默认 `legacy` 保留原版；新模板不重写比赛证据，也不改变视频编码画质。[查看十套模板与用法](docs/标题模板指南.md)。
-
-<p align="center">
-  <img src="docs/images/title-templates/editorial-zh.png" width="155" alt="中文刊物编辑标题">
-  <img src="docs/images/title-templates/arena-en.png" width="155" alt="英文竞技速报标题">
-  <img src="docs/images/title-templates/cinema-en.png" width="155" alt="英文电影片名标题">
-  <br><sub>实际标题卡版式；模板可与不同插画组合。</sub>
-</p>
-
-## 五套动画转场
-
-竞技斜切 `velocity`、纸艺翻页 `paper`、水墨流动 `ink`、棱镜折光 `prism`、胶片光泄 `film`。由 Codex 内置生图创作原始材质，程序驱动入场与反向退场；与插画和中英标题独立组合，保留 2.2 秒完整标题阅读时间，不裁短完整回合。
-
-```bash
-# 在原运行命令上增加：
---art-theme manga --title-template arena-zh --transition-style velocity
-
-# 离线生成五套动画预览和十段透明 ProRes 4444 MOV
-.venv/bin/python scripts/preview_transitions.py \
-  --output outputs/my-transitions --export-overlays
-```
-
-默认 `fade` 保留原版。[查看风格图集、时间线与剪辑软件用法](docs/动画转场指南.md)。
-
-## 可选：大模型排名
-
-将 [llm_api.example.json](llm_api.example.json) 复制为本地 `llm_api.json`，填写服务地址、模型名称和 API 密钥；该本地文件已被 Git 忽略。也可配置 `VOLLEYMOLE_API_KEY`、`VOLLEYMOLE_API_BASE`、`VOLLEYMOLE_MODEL` 环境变量。
-
-配置后用默认 `--ranker auto` 运行：完整回合排序发送预筛候选的关键帧与检测摘要，失败或未配置 API 时明确记录规则兜底；活力版还会对入选回合发送连续抽样画面，核验慢回放的动作与边界，不上传整段视频或音频。沿用配置的服务与模型，不隐式切换模型。
-
-需要每个入选回合都有通过核验的完整慢回放时，加 `--replay-review required`。任何回合缺少合格回放或尚未完成核验，都会保存进度并停止渲染。模板可以复用，换视频后的选点质量仍以实际画面验收为准。
-
-`--ranker rules` 配合默认 `--replay-review auto` 保持离线；显式增加 `--replay-review required` 会单独启用回放核验。详见[慢回放选点与完整性](docs/慢回放选点与完整性.md)。
-
-添加 `--analysis-mode events` 或 `--collection both|bloopers` 才进入全场事件路线：按块发送采样视频帧及可选同步音频，使用严格九维事实校验，允许不足数量；失败仍记录未完成项，不自动转成完整回合榜。接口协议、声音模型接入和缓存说明见 [事件理解与双榜](docs/事件理解与双榜.md)。
-
-## 输出与可追溯性
-
-事件路线的共用事件保存在 `event_timeline.json`，两类成片分别位于 `collections/highlights/`、`collections/bloopers/`，实际数量和不足原因见 `collections_report.json`。每个非空榜单目录都保存 `verification[_lively].json`（完整解码、帧数、音视频起点与时长）和 `alignment_verification[_lively].json`（成片对原片的画面抽样比对与原声互相关）。下面为默认完整回合路线及显式规则模式的目录：
+## 仓库内容
 
 ```text
-runs/match-top5/
-├── top5_lively.mp4           # 最终成片
-├── match_manifest.json      # 回合、原片时间与检测证据
-├── edit_decision.json       # 入选回合、排名及剪辑区间
-├── timing_latest.json       # 本次命令分阶段耗时
-├── render_report_lively.json
-├── verification_lively.json # 解码、帧数与音视频时间检查
-└── alignment_verification_lively.json # 原片画面／原声内容对齐
+src/volleymole/     运行代码、内置模板、提示词与素材来源
+scripts/           素材准备、评测、预览与发布检查
+tests/            回归测试
+docs/             使用指南与设计预览
 ```
 
-比赛状态、回合边界和球衣号码均为模型推断，不等于人工标注真值。远景、遮挡、多球热身会影响识别，规则排名也可能选入非正式对抗。建议在发布成片前人工复核；原片内容对齐通过只说明渲染没有换画面或错位原声，不代表语义识别完全正确。
-
-## 文档与开发
-
-| 入口 | 内容 |
-| --- | --- |
-| [安装与运行](docs/统一包安装与运行.md) | 环境、模型导入、缓存、API 与运行限制 |
-| [性能优化](docs/性能优化与验证.md) | 调度、后端、计时口径和复现实验 |
-| [插画风格](docs/插画风格指南.md) | 五套素材、风格选择、离线预览和只重做渲染 |
-| [标题模板](docs/标题模板指南.md) | 十套中英双语设计、英文字体、排版与离线预览 |
-| [动画转场](docs/动画转场指南.md) | 五套生图材质、入退场动画、透明 MOV 导出与时间线 |
-| [完整视觉套装](docs/完整视觉套装指南.md) | 五套统一美术指导、双语支持、一键应用与样片预览 |
-| [文档目录](docs/README.md) | 当前使用文档与历史开发记录 |
-| [贡献指南](CONTRIBUTING.md) | 项目结构、测试与提交约定 |
-| [脚本目录](scripts/README.md) | 发布检查、性能对照与本地历史审计 |
+视频、模型、密钥、个人模板、运行缓存、实验报告和本地归档均不提交。完整插画和字体由独立素材包分发；GitHub 保留少量预览图。
 
 ```bash
-# 不需要模型下载、GPU 或真实 API 的自动测试
-.venv/bin/python -m unittest discover -s tests -p 'test_*.py'
-
-# 上传前检查文件范围、较大文件与常见密钥格式
-python3 scripts/check_release.py
+python scripts/check_release.py --history  # 文件、历史凭据及大文件检查
+python scripts/check_release.py --archive dist/VolleyMole-github.zip  # 导出干净源码
+python -m unittest discover -s tests       # 完整测试需先安装视觉素材
 ```
 
-## 致谢与参考
-
-感谢以下项目的作者与维护者：
-
-- [volleyball-ml-models](https://github.com/masouduut94/volleyball-ml-models) · Masoud Masoumi Moghadam：比赛状态分类、图像预处理与帧采样的实现来源。
-- [fast-volleyball-tracking-inference](https://github.com/asigatchov/fast-volleyball-tracking-inference) · Alexander Sigatchov：VballNet 模型与推理参考，以及球定位、半径滤波和跟球裁切相关实现。
-- [Ultralytics](https://github.com/ultralytics/ultralytics) 与 [EasyOCR](https://github.com/JaidedAI/EasyOCR)：检测与球衣号码识别基础能力。
-- [PyTorch](https://pytorch.org/)、[Transformers](https://github.com/huggingface/transformers)、[ONNX Runtime](https://onnxruntime.ai/)：模型加载与推理。
-- [OpenCV](https://opencv.org/)、[PyAV](https://pyav.org/)、[FFmpeg](https://ffmpeg.org/)、[NumPy](https://numpy.org/)、[SciPy](https://scipy.org/)、[Pillow](https://python-pillow.org/)：媒体处理与科学计算。
-- [ZCOOL KuaiLe](https://github.com/google/fonts/tree/main/ofl/zcoolkuaile)：中文标题字体。
-
-球衣号码功能也参考了 `volleyball-highlights` 的功能目标；当前 `jersey.py` 为独立实现，未复制该项目源码。
-
-## 许可证与素材
-
-第三方改编源码、依赖、字体和模型权重各自保留其许可边界，详见 [THIRD_PARTY.md](THIRD_PARTY.md) 与 [素材说明](src/volleymole/assets/README.md)。其中 Ultralytics 为 AGPL 依赖，不能把本项目整体视为 MIT 授权。
-
-项目自有代码采用 [MIT License](LICENSE)。第三方代码、依赖和素材仍遵循各自的许可条款。模型权重、比赛录像和本地凭据不随仓库分发；MIT 许可不自动覆盖模型权重、品牌标志或其他单独授权的素材。
+开发说明见[CONTRIBUTING](CONTRIBUTING.md)，更多指南见[文档目录](docs/README.md)。项目代码采用 [MIT](LICENSE)；依赖、改编代码和模型的许可分别见[第三方来源](THIRD_PARTY.md)。

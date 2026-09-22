@@ -176,3 +176,32 @@ def compile_plan(jobs, results, assets, rules, *, observations=None):
             'cues': sorted(selected, key=lambda c: c['at_sec']), 'decisions': audit,
             'review_complete': len(results) == len(jobs) and not any(
                 row['status'] == 'independent_action_review_required' for row in audit)}
+
+
+def schedule_after_action(raw, evidence, clip, assets, rules, *, max_delay_sec=1.):
+    """Delay an API-selected phrase to a nearby witnessed, contact-free gap.
+
+    The delay is measured in source time. Never change the meme, facts, action,
+    a model abstention, or a semantic veto. Preserve the original model answer.
+    """
+    import copy
+    if type(max_delay_sec) not in (int, float) or not math.isfinite(max_delay_sec) or not 0<=max_delay_sec<=2:
+        raise ValueError('invalid_meme_delay')
+    cue, reason = eligible_cue(raw, evidence, clip, assets, rules)
+    audit = {'original_anchor_frame_id': raw['anchor_frame_id'], 'status': reason,
+             'source_delay_sec': 0., 'scheduled_anchor_frame_id': raw['anchor_frame_id']}
+    if cue or raw['placement'] != 'after_action' or reason not in (
+            'would_cover_ball_contact', 'wrong_side_of_action', 'outcome_not_yet_visible'):
+        return copy.deepcopy(raw), audit
+    frames = {f['id']: f['start_sec'] for f in evidence}
+    start = frames[raw['anchor_frame_id']]
+    for frame in evidence:
+        delay = frame['start_sec'] - start
+        if not 0 < delay <= max_delay_sec:
+            continue
+        candidate = {**copy.deepcopy(raw), 'anchor_frame_id': frame['id']}
+        adjusted, _ = eligible_cue(candidate, evidence, clip, assets, rules)
+        if adjusted:
+            return candidate, {**audit, 'status': 'delayed_to_safe_gap',
+                               'source_delay_sec': delay, 'scheduled_anchor_frame_id': frame['id']}
+    return copy.deepcopy(raw), audit

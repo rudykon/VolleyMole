@@ -143,6 +143,7 @@ def execute_match(args,day,sets):
         art,title,transition=resolve_design(args.design_suite,args.design_language,args.art_theme,args.title_template,args.transition_style)
         from .replay_stage import config_from as replay_config
         save_json(directory/'run_config.json',{'mode':'date_grouped_match','date':day,'top_k':args.top_k,
+            'template':getattr(args,'template_snapshot',None),
             **replay_config(args),
             'collection':args.collection,'analysis_mode':args.analysis_mode,'analysis_timeout':args.analysis_timeout,
             'review_budget_fraction':args.review_budget_fraction,'budget_scope':'per_source',

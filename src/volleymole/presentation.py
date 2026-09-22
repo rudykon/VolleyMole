@@ -41,14 +41,16 @@ def peak_window(item, rally, length=2.0):
             'rally_id': item['rally_id'], 'rank': item['rank']}
 
 
-def build_timeline(decision, manifest,title_template='legacy',transition_style='fade'):
+def build_timeline(decision, manifest,title_template='legacy',transition_style='fade',*,replays=True,replay_speed=REPLAY_SPEED):
     from .transitions import validate_style
     from .replay import replay_window
     from .sources import source_for
     validate_style(transition_style)
+    if type(replays) is not bool or type(replay_speed) not in (float,int) or not math.isfinite(replay_speed) or not .5 <= replay_speed <= 1:
+        raise ValueError('回放开关须为布尔值，速度须在 0.5–1.0 之间')
     by_id = {r['rally_id']: r for r in manifest['rallies']}
-    replays = {item['rally_id']: replay_window(item, by_id[item['rally_id']],
-               source_for(manifest,item['rally_id']) if 'replay_review' in by_id[item['rally_id']] else {})
+    replay_windows = {item['rally_id']: replay_window(item, by_id[item['rally_id']],
+               source_for(manifest,item['rally_id']) if 'replay_review' in by_id[item['rally_id']] else {}) if replays else None
                for item in decision['selected']}
     segments = []
     def add(kind, frames, **data):
@@ -57,7 +59,7 @@ def build_timeline(decision, manifest,title_template='legacy',transition_style='
         segments.append(dict(kind=kind, output_frames=frames, duration_sec=frames/FPS, replay_policy_version=2, **data))
     # Five one-second highlights, followed by readable full-screen title cards.
     for item in reversed(decision['selected'][:5]):
-        action = replays[item['rally_id']]
+        action = replay_windows[item['rally_id']]
         rally = by_id[item['rally_id']]
         if action:
             rally = {**rally, 'peak_sec':action['peak_sec'], 'peak_evidence':action['peak_evidence']}
@@ -70,14 +72,15 @@ def build_timeline(decision, manifest,title_template='legacy',transition_style='
             illustration=illustration_for(item).name,transition_style=transition_style,
             title_hold_sec=(TRANSITION_FRAMES-2*TRANSITION_RAMP_FRAMES)/FPS)
         frames = math.ceil((item['clip_end_sec']-item['clip_start_sec'])*FPS-1e-6)
-        window = replays[item['rally_id']]
+        window = replay_windows[item['rally_id']]
         add('rally', frames, rank=item['rank'], rally_id=item['rally_id'], playback_rate=1.,
             source_start_sec=item['clip_start_sec'], source_end_sec=item['clip_end_sec'],
             replay_expected=window is not None,
-            replay_skip_reason=None if window else 'No complete reviewed or supported attack/defense sequence; midpoint/set replay omitted.')
+            replay_skip_reason=None if window else 'Replays disabled by configuration.' if not replays else
+                'No complete reviewed or supported attack/defense sequence; midpoint/set replay omitted.')
         if window:
-            frames = math.ceil((window['source_end_sec']-window['source_start_sec'])/REPLAY_SPEED*FPS-1e-6)
-            add('replay', frames, playback_rate=REPLAY_SPEED, rank=item['rank'], rally_id=item['rally_id'], **window)
+            frames = math.ceil((window['source_end_sec']-window['source_start_sec'])/replay_speed*FPS-1e-6)
+            add('replay', frames, playback_rate=replay_speed, rank=item['rank'], rally_id=item['rally_id'], **window)
     offset = 0
     for i, segment in enumerate(segments):
         if 'sources' in manifest and 'rally_id' in segment:
@@ -148,9 +151,10 @@ def validate_replay_evidence(report, decision, manifest):
     """Check against source-bound review data, not only the report's own claims."""
     if report.get('replay_policy_version') != 2:
         return
-    expected=build_timeline(decision,manifest,report.get('title_template','legacy'),report.get('transition_style','fade'))
+    expected=build_timeline(decision,manifest,report.get('title_template','legacy'),report.get('transition_style','fade'),
+                            replays=report.get('replays',True),replay_speed=report.get('replay_speed',REPLAY_SPEED))
     fields=('kind','rank','next_rank','rally_id','source_start_sec','source_end_sec','output_frames',
-            'peak_sec','action_start_sec','action_end_sec','replay_expected','replay_selection','visual_review_used')
+            'peak_sec','action_start_sec','action_end_sec','replay_expected','replay_selection','visual_review_used','playback_rate')
     if [[row.get(k) for k in fields] for row in expected] != [[row.get(k) for k in fields] for row in report['segments']]:
         raise ValueError('实际回放与原片动作复核记录不一致')
 
@@ -195,7 +199,7 @@ def transition_clip(previous, following, path, segment, font_path, art_theme='de
     return encode_transition(previous,following,path,segment,font_path,art_theme,title_template,transition_style,design_suite,quality)
 
 
-def render_lively(directory, font, workers=1, art_theme='default',title_template='legacy',transition_style='fade',design_suite='custom',quality='1080p'):
+def render_lively(directory, font, workers=1, art_theme='default',title_template='legacy',transition_style='fade',design_suite='custom',quality='1080p',*,replays=True,replay_speed=REPLAY_SPEED):
     from .quality import get_quality
     q=get_quality(quality)
     from concurrent.futures import ThreadPoolExecutor
@@ -211,12 +215,15 @@ def render_lively(directory, font, workers=1, art_theme='default',title_template
     for asset in asset_paths(art_theme,title_template,transition_style,design_suite):
         if not asset.is_file():raise ValueError(f'缺失内置风格素材：{asset}')
     from .replay_stage import load_reviewed_manifest
-    manifest,replay_review_report = load_reviewed_manifest(directory)
+    if replays:
+        manifest,replay_review_report = load_reviewed_manifest(directory)
+    else:
+        manifest,replay_review_report = read_json(directory/'match_manifest.json'),None
     decision = read_json(directory/'edit_decision.json')
     validate_decision(decision,manifest,directory,len(decision['selected']))
     from .font_support import validate_render_fonts
     font_validation=validate_render_fonts(decision,font,'lively',title_template)
-    segments = build_timeline(decision,manifest,title_template,transition_style)
+    segments = build_timeline(decision,manifest,title_template,transition_style,replays=replays,replay_speed=replay_speed)
     for segment in segments:
         segment['design_suite']=design_suite
         if segment['kind']=='transition' and design_suite!='custom':
@@ -277,6 +284,6 @@ def render_lively(directory, font, workers=1, art_theme='default',title_template
         'illustration_assets':[identity(p) for p in asset_paths(art_theme,title_template,transition_style,design_suite)],
         'clips':clips,'segments':segments,'expected_duration_sec':sum(s['output_frames'] for s in segments)/FPS,
         'teaser_duration_sec':sum(s['duration_sec'] for s in segments if s['kind']=='teaser'),
-        'replay_speed':REPLAY_SPEED,'render_timing_sec':{'rally_render':round(base_elapsed,3),
+        'replays':replays,'replay_speed':replay_speed,'render_timing_sec':{'rally_render':round(base_elapsed,3),
         'teaser_replay_transition':round(effects_elapsed,3),'assembly':round(render_elapsed-base_elapsed-effects_elapsed,3),
         'total':round(render_elapsed,3)},'audio':'Source sound; time-stretched replay audio; quiet synthesized transition whoosh.'})

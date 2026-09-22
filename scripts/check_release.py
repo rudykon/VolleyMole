@@ -1,15 +1,18 @@
-"""Read-only GitHub preflight; reports locations, never matching secret values."""
+"""GitHub preflight and optional source export; never print matching secrets."""
 import argparse
 from pathlib import Path
 import re
 import subprocess
 from urllib.parse import unquote, urlsplit
+import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
-LOCAL_DIRS = {'data','models','runs','outputs','tools','.venv','venv','.agents','.codex','build','dist'}
+LOCAL_DIRS = {'data','models','runs','outputs','reports','templates','.local','refer','tools','.venv','venv','.agents','.codex','build','dist'}
 LOCAL_NAMES = {'llm_api.json','github_token.json','.env'}
-MEDIA = {'.pt','.pth','.onnx','.safetensors','.engine','.plan','.mp4','.mov','.avi','.mkv','.webm','.pem','.key'}
+MEDIA = {'.pt','.pth','.onnx','.safetensors','.engine','.plan','.mp4','.mov','.avi','.mkv','.webm',
+         '.m4v','.mts','.m2ts','.wav','.mp3','.m4a','.aac','.flac','.ogg','.log','.jsonl',
+         '.tmp','.partial','.zip','.tar','.gz','.tgz','.7z','.pem','.key'}
 LIMIT = 50 * 1024 * 1024
 SECRETS = {
     'GitHub token': re.compile(rb'(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})'),
@@ -47,7 +50,10 @@ def link_issues(path, data, published):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--history',action='store_true')
+    parser.add_argument('--archive',type=Path,help='检查通过后导出干净源码 ZIP（不含 Git 历史），不覆盖已有文件')
     args=parser.parse_args()
+    if args.archive and (args.archive.suffix.lower()!='.zip' or args.archive.exists()):
+        parser.error('--archive 必须是尚不存在的 .zip 路径')
     names=set(git('ls-files','--cached','--others','--exclude-standard','-z').decode().strip('\0').split('\0'))
     published={n for n in names if n and (ROOT/n).is_file()}
     issues=[]
@@ -92,6 +98,12 @@ def main():
     print('Heuristic secret scan only; review the staged diff before publishing.')
     if issues:raise SystemExit(1)
     print('Preflight passed. No files staged, committed or pushed.')
+    if args.archive:
+        args.archive.parent.mkdir(parents=True,exist_ok=True)
+        with zipfile.ZipFile(args.archive,'x',compression=zipfile.ZIP_DEFLATED) as archive:
+            for name in sorted(published):
+                archive.write(ROOT/name,'VolleyMole/'+name)
+        print(f'Clean source archive: {args.archive} ({len(published)} files; no Git history)')
 
 
 if __name__=='__main__':main()

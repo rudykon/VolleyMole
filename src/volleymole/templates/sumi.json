@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "name": "sumi",
+  "description": "墨间回合 · 中文 · 1080p",
+  "options": {
+    "style": "lively",
+    "design_suite": "sumi",
+    "design_language": "zh",
+    "quality": "1080p",
+    "replay_review": "auto",
+    "replays": true,
+    "replay_speed": 0.6666666666666666
+  },
+  "audio": {
+    "enabled": true,
+    "max_cues": 2,
+    "rms_db": -20,
+    "duck_db": -3
+  }
+}

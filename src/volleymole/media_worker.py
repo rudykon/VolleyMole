@@ -179,7 +179,7 @@ def render_clip(directory, item, manifest, font_path, center_only=False, style='
     return report
 
 
-def render(directory,font,style='classic',workers=1,art_theme=None,title_template=None,transition_style=None,design_suite=None,design_language=None,quality=None):
+def render(directory,font,style='classic',workers=1,art_theme=None,title_template=None,transition_style=None,design_suite=None,design_language=None,quality=None,*,replays=None,replay_speed=None):
     from concurrent.futures import ThreadPoolExecutor
     from .quality import get_quality,DEFAULT_QUALITY
     config=read_json(directory/'run_config.json') if (directory/'run_config.json').is_file() else {}
@@ -197,7 +197,9 @@ def render(directory,font,style='classic',workers=1,art_theme=None,title_templat
         art_theme,title_template,transition_style=resolve_design(design_suite,design_language,art_theme,title_template,transition_style)
         validate_style(transition_style)
         get_template(title_template)
-        return render_lively(directory,font,workers,art_theme,title_template=title_template,transition_style=transition_style,design_suite=design_suite,quality=quality)
+        return render_lively(directory,font,workers,art_theme,title_template=title_template,transition_style=transition_style,design_suite=design_suite,quality=quality,
+                             replays=config.get('replays',True) if replays is None else replays,
+                             replay_speed=config.get('replay_speed',2/3) if replay_speed is None else replay_speed)
     if art_theme not in (None,'default') or title_template not in (None,'legacy') or transition_style not in (None,'fade') or design_suite not in (None,'custom'):
         raise ValueError('--art-theme / --title-template / --transition-style / --design-suite 仅用于 lively 呈现')
     manifest=read_json(directory/'match_manifest.json');decision=read_json(directory/'edit_decision.json')

@@ -7,11 +7,11 @@ src/volleymole/   CLI、模型适配、推理、回合、排名与渲染
   assets/        品牌、插画、字体及来源记录
   licenses/      改编源码的版权与许可说明
 tests/           自动测试及另行执行的真实模型测试
-scripts/         发布检查、性能对照和历史验收工具
-docs/            使用说明、性能记录与历史方案
+scripts/         发布检查、素材准备、预览和评测工具
+docs/            使用说明、设计预览与评测资料
 ```
 
-`models/`、`data/`、`runs/` 和 `.venv/` 是本地目录，不提交 Git。项目运行不依赖 `tools/`。
+`models/`、`data/`、`runs/`、`outputs/`、`templates/`、`.local/` 和 `.venv/` 是本地目录，不提交 Git。内置模板位于 `src/volleymole/templates/`，随包发布。项目运行不依赖 `tools/`。
 
 ## 开发与验证
 
@@ -36,6 +36,8 @@ git diff --check
 
 ## GitHub 发布准备
 
-发布检查脚本只扫描，不会自动暂存、提交或推送。它检查当前待发布文件；可用 `--history` 扫描历史对象中的常见凭据格式及大文件。启发式检查不能保证发现所有敏感内容，提交前仍需阅读 `git diff --cached`。
+发布检查脚本默认只扫描，不会自动暂存、提交或推送。它检查当前待发布文件；可用 `--history` 扫描历史对象中的常见凭据格式及大文件。启发式检查不能保证发现所有敏感内容，提交前仍需阅读 `git diff --cached`。
+
+需要直接上传源码时，运行 `python3 scripts/check_release.py --archive dist/VolleyMole-github.zip`。只有检查通过才会生成 ZIP，包含当前源码、未忽略的新文件和必要文档，不包含 `.git` 历史、个人模板或本地产物；已有 ZIP 不会被覆盖。正常使用 Git 提交时，将删除项一并暂存，避免旧报告继续留在仓库当前版本。
 
 项目自有代码采用 [MIT License](LICENSE)，自有代码贡献应使用相同许可。新增第三方内容仍需保留其原始许可与来源记录，不能将依赖或模型权重统一改标为 MIT。模型与录像不作为源码仓库内容发布。

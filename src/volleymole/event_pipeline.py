@@ -344,6 +344,8 @@ def complete_collections(args, manifest, timeline, directory):
     for collection in (('highlights', 'bloopers') if args.collection == 'both' else (args.collection,)):
         target = directory/'collections'/collection
         decision = collection_artifacts(manifest, timeline, target, collection, args.top_k)
+        if (directory/'run_config.json').is_file():
+            save_json(target/'run_config.json', {**read_json(directory/'run_config.json'), 'collection': collection})
         report = {'collection': collection, 'directory': str(target), 'actual_count': decision['actual_count'],
             'requested_count': decision['requested_count'], 'shortage_reason': decision['shortage_reason'], 'output': None,
             'analysis_status': analysis['status']}
@@ -363,11 +365,13 @@ def complete_collections(args, manifest, timeline, directory):
             suffix = '_lively' if args.style == 'lively' else ''
             def make_video():
                 render(target, args.font, args.style, args.render_workers, args.art_theme, args.title_template,
-                    args.transition_style, args.design_suite, args.design_language, args.quality)
+                    args.transition_style, args.design_suite, args.design_language, args.quality,
+                    replays=getattr(args,'replays',True),replay_speed=getattr(args,'replay_speed',2/3))
                 rendered = read_json(target/f'render_report{suffix}.json')
                 return rendered['output'], [rendered['output'], target/f'render_report{suffix}.json']+[s['path'] for s in rendered.get('segments', rendered['clips'])]
             signature = {'decision': digest(target/'edit_decision.json'), 'manifest': digest(target/'match_manifest.json'),
                 'replay_review':digest(target/'replay_reviews.json'),
+                'replays':getattr(args,'replays',True),'replay_speed':getattr(args,'replay_speed',2/3),
                 'code': {p.name: digest(p) for p in APP.glob('*.py')}, 'fonts': font_fingerprint(args.font),
                 'render': [args.style, args.render_workers, args.art_theme, args.title_template, args.transition_style,
                     args.design_suite, args.design_language, args.quality]}

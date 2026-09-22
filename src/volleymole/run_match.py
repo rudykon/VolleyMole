@@ -22,6 +22,7 @@ from .title_templates import TEMPLATE_IDS
 from .transitions import STYLE_IDS
 from .design_suites import SUITE_IDS, resolve_design
 from .quality import QUALITY_IDS,DEFAULT_QUALITY,get_quality,report_dimensions
+from .templates import TemplateArgumentParser
 
 
 def verify(directory, top_k, style='classic', alignment_python=None):
@@ -29,7 +30,7 @@ def verify(directory, top_k, style='classic', alignment_python=None):
     manifest=read_json(directory/'match_manifest.json');decision=read_json(directory/'edit_decision.json')
     validate_decision(decision,manifest,directory,top_k)
     render=read_json(directory/f'render_report{suffix}.json')
-    if style=='lively':
+    if style=='lively' and render.get('replays',True):
         from .replay_stage import load_reviewed_manifest
         manifest,_=load_reviewed_manifest(directory,render.get('replay_review_report'))
     from .font_support import validate_render_fonts
@@ -76,7 +77,8 @@ def verify(directory, top_k, style='classic', alignment_python=None):
 
 
 def argument_parser():
-    parser=argparse.ArgumentParser(description=__doc__)
+    parser=TemplateArgumentParser(description=__doc__,allow_abbrev=False)
+    parser.add_argument('--template',help='内置/已导入的模板名称，或 JSON 文件；显式命令行参数优先')
     parser.add_argument('--video',type=Path,required=True)
     parser.add_argument('--top-k',type=int,choices=(5,10),default=5)
     parser.add_argument('--collection',choices=('highlights','bloopers','both'),default='highlights')
@@ -314,6 +316,7 @@ def main(argv=None):
     tracking_cache=args.tracking_cache or cached.get('tracking')
     from .replay_stage import config_from as replay_config
     save_json(directory/'run_config.json',{'video':str(video),'top_k':args.top_k,'focus_player':args.focus_player,
+              'style':args.style,'template':args.template_snapshot,
               **replay_config(args),
               'quality':args.quality,'collection':args.collection,'analysis_mode':args.analysis_mode,
               'analysis_timeout':args.analysis_timeout,'review_budget_fraction':args.review_budget_fraction,
@@ -421,6 +424,7 @@ def main(argv=None):
                           'render_workers':args.render_workers,'art_theme':args.art_theme,'title_template':args.title_template,'transition_style':args.transition_style,
                           'design_suite':args.design_suite,'design_language':args.design_language,
                           'quality':args.quality,'quality_code':digest(APP/'quality.py'),
+                          'replays':args.replays,'replay_speed':args.replay_speed,
                           'sources_code':digest(APP/'sources.py'),
                           'presentation':code['presentation.py'],'replay':code['replay.py'],'camera':code['camera.py'],'style':args.style,
                           'illustrated':code['illustrated.py'],
