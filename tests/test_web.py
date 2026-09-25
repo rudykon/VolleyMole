@@ -133,8 +133,9 @@ class WorkspaceTests(unittest.TestCase):
         (self.root/'runs/game/render_report.json').write_text(json.dumps({'output':str(self.root/'runs/game/top5.mp4')}))
         (self.root/'runs/game/render_report_lively.json').write_text(json.dumps({'output':str(self.root/'outputs/final.mp4')}))
         result=self.app.library()
-        self.assertEqual({r['path'] for r in result['outputs']},{'outputs/final.mp4','runs/game/top5.mp4'})
-        self.assertEqual({r['path'] for r in result['materials']},{'data/match.MOV','data/uploads/batch/voice.wav'})
+        self.assertEqual(result['outputs'],[])
+        self.assertEqual({r['path'] for r in result['sources']},{'data/match.MOV'})
+        self.assertEqual({r['path'] for r in result['materials']},{'data/uploads/batch/voice.wav'})
         self.assertEqual(next(r['kind'] for r in result['materials'] if r['name']=='voice.wav'),'audio')
         self.assertTrue(all('/' not in r['name'] for rows in result.values() for r in rows))
 
@@ -151,7 +152,7 @@ class WorkspaceTests(unittest.TestCase):
         (self.root/'data/alias.mp4').symlink_to(self.root/'data/secret.mp4')
         (self.root/'data/external').symlink_to('/tmp')
         result=self.app.library()
-        self.assertEqual([r['path'] for r in result['outputs']],['runs/moved/top5.mp4'])
+        self.assertEqual(result['outputs'],[])
         self.assertEqual(result['materials'],[])
 
     def test_media_library_prefers_delivered_film_over_pre_audio_render(self):
@@ -161,7 +162,15 @@ class WorkspaceTests(unittest.TestCase):
         export=self.root/'outputs/finished.mp4';export.parent.mkdir()
         export.write_bytes(b'final-with-voice')
         (run/'delivery.json').write_text(json.dumps({'output':str(export)}))
-        self.assertEqual([r['path'] for r in self.app.library()['outputs']],['outputs/finished.mp4'])
+        self.assertEqual(self.app.library()['outputs'],[])
+
+    def test_customer_films_are_independent_of_runs(self):
+        from web_fixtures import film_fixture
+        film_id=film_fixture(self.root)
+        film=self.app.library()['outputs'][0]
+        self.assertEqual(film['film_id'],film_id)
+        self.assertNotIn('run',film)
+        self.assertEqual(self.app.media_path(film['path']),self.root/film['path'])
 
 
 class QueueTests(unittest.TestCase):
@@ -272,9 +281,26 @@ class HTTPTests(unittest.TestCase):
         status,_,data=self.request('/api/library')
         self.assertEqual(status,200)
         result=json.loads(data)
-        self.assertEqual(set(result),{'outputs','materials'})
-        self.assertIn('sample.mp4',[row['name'] for row in result['materials']])
+        self.assertEqual(set(result),{'outputs','sources','materials'})
+        self.assertIn('sample.mp4',[row['name'] for row in result['sources']])
+        self.assertNotIn('sample.mp4',[row['name'] for row in result['materials']])
         self.assertNotIn('llm_api.json',json.dumps(result))
+
+    def test_backend_video_cannot_be_played_or_thumbnailed(self):
+        path=self.root/'runs/internal.mp4';path.parent.mkdir(exist_ok=True);path.write_bytes(b'private')
+        for endpoint in ('/media','/api/media-info','/api/thumbnail'):
+            self.assertEqual(self.request(endpoint+'?path=runs/internal.mp4')[0],403)
+
+    def test_published_film_details_do_not_require_run_reports(self):
+        from web_fixtures import film_fixture
+        film_id=film_fixture(self.root)
+        status,_,body=self.request('/api/film?id='+film_id)
+        self.assertEqual(status,200)
+        self.assertEqual(json.loads(body)['highlights'][0]['title'],'精彩扣球')
+        self.assertNotIn(b'runs/',body)
+        path=f'outputs/published/{film_id}/video.mp4'
+        self.assertEqual(self.request('/media?path='+path,headers={'Range':'bytes=0-3'})[0],206)
+        self.assertEqual(self.request('/api/media-info?path='+path)[0],200)
 
     def test_cross_site_host_and_missing_token_are_rejected(self):
         for headers in ({'X-VolleyMole-Token':''},{'Origin':'https://attacker.invalid'},{'Host':'attacker.invalid'}):
@@ -303,6 +329,17 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(self.request('/api/upload?name=../bad.mp4',b'bad')[0],400)
         self.assertEqual(self.request('/api/upload?name=script.py',b'bad')[0],400)
         self.assertFalse(list((self.root/'data/uploads/testbatch').glob('*.partial')))
+
+    def test_upload_purpose_persists_and_same_named_videos_stay_separate(self):
+        for purpose in ('sources','materials'):
+            status,_,body=self.request('/api/upload?name=clip.mp4&batch=roles&purpose='+purpose,b'media')
+            self.assertEqual(status,201)
+            self.assertEqual(json.loads(body)['path'],f'data/uploads/{purpose}/roles/clip.mp4')
+        result=self.app.library()
+        self.assertIn('data/uploads/sources/roles/clip.mp4',{r['path'] for r in result['sources']})
+        self.assertIn('data/uploads/materials/roles/clip.mp4',{r['path'] for r in result['materials']})
+        self.assertEqual(self.request('/api/upload?name=clip.mp4&purpose=outputs',b'media')[0],400)
+        self.assertEqual(self.request('/api/upload?name=voice.wav&purpose=sources',b'media')[0],400)
 
     def test_templates_save_conflict_validation_and_catalog(self):
         doc={'version':1,'name':'web-test','options':{'quality':'720p','replays':False}}

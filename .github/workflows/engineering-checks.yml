@@ -75,6 +75,7 @@ jobs:
             test_performance \
             test_pipeline \
             test_probe_event_models \
+            test_published_films \
             test_public_audio_eval \
             test_quality \
             test_rallies \
@@ -101,6 +102,8 @@ jobs:
             test_temporal_understanding \
             test_templates \
             test_web \
+            test_web_experience \
+            test_web_library \
             test_video_decode \
             test_volleyball_action_eval \
             test_volleyball_data_splits

@@ -18,6 +18,10 @@ import uuid
 
 from .catalog import catalog, build_argv
 from .jobs import JobManager, redact
+from .media import MediaCache
+from .library import collections as media_collections
+from .progress import summary as task_summary
+from . import films
 
 STATIC=Path(__file__).with_name('static')
 MEDIA={'.mp4','.mov','.mkv','.avi','.webm','.m4v','.mts','.m2ts','.wav','.mp3','.m4a','.aac','.flac','.ogg'}
@@ -45,6 +49,7 @@ class Workspace:
         self.token=secrets.token_urlsafe(32)
         self.jobs=JobManager(self.root)
         self.settings_lock=threading.RLock()
+        self.media_cache=MediaCache(self)
 
     def path(self,value,*,exist=False):
         if not isinstance(value,str) or not value or '\x00' in value: raise ValueError('请选择工作区内的路径')
@@ -65,6 +70,8 @@ class Workspace:
         if key=='font' and p.is_absolute() and p.resolve().is_relative_to('/usr/share/fonts') and p.is_file(): return p.resolve()
         result=self.path(value)
         if key in {'output','render_output','directory','run','analysis_cache_dir'}:
+            if result.is_relative_to(self.root/films.SHELF):
+                raise ValueError('成片目录由收录流程管理，请将后台输出放在 runs 下')
             relative=result.relative_to(self.root)
             if not relative.parts or (len(relative.parts)==1 and result.is_file()):
                 raise ValueError('输出或工作目录不能指向项目根目录及其已有文件')
@@ -133,57 +140,18 @@ class Workspace:
         return sorted(rows,key=lambda r:r['modified'],reverse=True)
 
     def library(self):
-        """Customer media collections, excluding reports and processing intermediates."""
-        collections={'outputs':{},'materials':{}}
-        internal={'analytics','tracking','previews','profiles','frames','segments','clips',
-                  'semantic_cache','media_cache','verification','verification_lively',
-                  'ocr_runtime','visual-assets','web-config','public_benchmarks','__pycache__'}
+        return media_collections(self)
 
-        def add(path,collection):
-            try:
-                path=self.path(str(path),exist=True)
-                if not path.is_file() or path.suffix.lower() not in (VIDEO if collection=='outputs' else MEDIA): return
-                stat=path.stat()
-                if not stat.st_size: return
-                key=self.relative(path)
-                collections[collection][key]={'name':path.name,'path':key,'size':stat.st_size,
-                                               'modified':stat.st_mtime,
-                                               'kind':'video' if path.suffix.lower() in VIDEO else 'audio'}
-            except (ValueError,OSError): pass
-
-        for base in ('data','outputs','runs'):
-            start=self.root/base
-            if start.is_symlink(): continue
-            for root,dirs,files in os.walk(start,followlinks=False):
-                folder=Path(root)
-                try: self.path(str(folder),exist=True)
-                except (ValueError,OSError):
-                    dirs[:]=[]
-                    continue
-                dirs[:]=[d for d in dirs if not SECRET.search(d) and d not in internal
-                         and not (folder/d).is_symlink()]
-                # A delivery record supersedes the pre-audio render, which may
-                # still be kept alongside the run as clean.mp4.
-                reports={'delivery.json'} if 'delivery.json' in files else {
-                    name for name in files if name.startswith('render_report') and name.endswith('.json')}
-                for name in files:
-                    path=folder/name
-                    if base in {'data','outputs'}:
-                        add(path,'materials' if base=='data' else 'outputs')
-                    if base!='data' and name in reports:
-                        try:
-                            report=self.read_json(self.path(str(path),exist=True))
-                            output=report.get('output') if isinstance(report,dict) else None
-                            if not isinstance(output,str) or not output: continue
-                            add(output,'outputs')
-                            # Older runs may have moved from another machine; use only
-                            # a matching final filename beside the render report.
-                            add(folder/Path(output).name,'outputs')
-                        except (ValueError,OSError): continue
-        # A rendered export under data is still a finished film, not source footage.
-        for key in collections['outputs']: collections['materials'].pop(key,None)
-        return {name:sorted(rows.values(),key=lambda r:(-r['modified'],r['name'],r['path']))
-                for name,rows in collections.items()}
+    def media_path(self, value):
+        path = self.path(value, exist=True)
+        relative = path.relative_to(self.root)
+        from .library import INTERNAL
+        if relative.is_relative_to('data') and not INTERNAL.intersection(relative.parts):
+            return path
+        if path.parent.parent == self.root / films.SHELF and path.name in {'video.mp4', 'poster.jpg'}:
+            films.detail(self, path.parent.name)
+            return path
+        raise PermissionError('后台产物不能直接展示，请先收录为成片')
 
     def run_detail(self,value):
         p=self.path(value,exist=True)
@@ -328,9 +296,15 @@ class Handler(BaseHTTPRequestHandler):
             if url.path=='/api/jobs': return self.send_json(self.app.jobs.list())
             if url.path.startswith('/api/jobs/'):
                 job_id=url.path.rsplit('/',1)[-1];job=self.app.jobs.get(job_id)
-                return self.send_json({**job,'log':self.app.jobs.log(job_id)})
+                log=self.app.jobs.log(job_id)
+                return self.send_json({**job,'log':log,'progress':task_summary(self.app,job,log)})
             if url.path=='/api/runs': return self.send_json(self.app.runs())
             if url.path=='/api/library': return self.send_json(self.app.library())
+            if url.path=='/api/film': return self.send_json(films.detail(self.app,get('id')))
+            if url.path=='/api/media-info':
+                self.app.media_path(get('path'))
+                return self.send_json(films.media_info(self.app,get('path')) or self.app.media_cache.info(get('path')))
+            if url.path=='/api/thumbnail': return self.serve_file(self.app.media_cache.thumbnail(get('path')))
             if url.path=='/api/run': return self.send_json(self.app.run_detail(get('path')))
             if url.path=='/api/templates': return self.send_json(self.app.templates())
             if url.path=='/api/settings': return self.send_json(self.app.settings())
@@ -353,6 +327,7 @@ class Handler(BaseHTTPRequestHandler):
             if url.path=='/media':
                 p=self.app.path(get('path'),exist=True)
                 if p.suffix.lower() not in DOWNLOAD: raise ValueError('不支持此文件格式')
+                if p.suffix.lower() in MEDIA: p=self.app.media_path(get('path'))
                 if p.suffix.lower()=='.json':
                     # Reports can contain copied configuration. Redact before download.
                     data=json.dumps(redact(self.app.read_json(p)),ensure_ascii=False,indent=2).encode()
@@ -424,6 +399,12 @@ class Handler(BaseHTTPRequestHandler):
             url=urlsplit(self.path);q=parse_qs(url.query)
             if url.path=='/api/upload': return self.upload(q)
             body=self.body()
+            if url.path=='/api/publish':
+                if any(j['status'] in {'queued','running','cancelling'} for j in self.app.jobs.list()):
+                    raise ValueError('请等待当前任务结束后收录已有成片')
+                ids=films.publish_run(self.app,body.get('run'),title=body.get('title',''))
+                if not ids: raise ValueError('未找到可收录的最终成片，请确认交付视频仍然存在')
+                return self.send_json({'film_ids':ids},201)
             if url.path=='/api/resume': return self.send_json(self.app.resume(body.get('path')))
             if url.path=='/api/jobs':
                 command=body.get('command');sub=body.get('subcommand');values=body.get('values',{}).copy()
@@ -483,7 +464,12 @@ class Handler(BaseHTTPRequestHandler):
         if Path(name).suffix.lower() not in MEDIA|{'.json','.zip','.pt','.pth','.onnx','.ttf','.otf'}: raise ValueError('不支持此文件类型')
         n=int(self.headers.get('Content-Length','0'))
         if not 0<n<=50*1024**3: raise ValueError('单文件大小须在 0–50 GB 之间')
-        target=self.app.path('data/uploads/'+batch+'/'+name)
+        purpose=q.get('purpose',[''])[0]
+        if purpose not in {'','sources','materials'}: raise ValueError('上传用途无效')
+        if purpose=='sources' and Path(name).suffix.lower() not in VIDEO: raise ValueError('比赛源片只接受视频文件')
+        if purpose=='materials' and Path(name).suffix.lower() not in MEDIA: raise ValueError('剪辑素材只接受视频或音频文件')
+        location='data/uploads/'+(purpose+'/' if purpose else '')+batch+'/'+name
+        target=self.app.path(location)
         target.parent.mkdir(parents=True,exist_ok=True)
         temporary=target.with_name(target.name+'.'+uuid.uuid4().hex+'.partial')
         try:

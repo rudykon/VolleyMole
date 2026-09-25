@@ -144,9 +144,20 @@ class JobManager:
                 with self.lock:
                     cancellation=self.cancellations.get(job_id)
                 if cancellation is not None: cancellation.wait(timeout=3)
+                # Package finished films before releasing the queue. A failed
+                # packaging step must not rewrite the CLI's real exit status.
+                publication = {}
+                if code == 0 and job['status'] != 'cancelling':
+                    from .films import publish_job
+                    try:
+                        film_ids = publish_job(self.workspace, {**job, 'status': 'succeeded'}, self.log(job_id),
+                                               cancelled=lambda: self.get(job_id)['status']=='cancelling')
+                        publication = {'film_ids': film_ids}
+                    except Exception as exc:
+                        publication = {'film_ids': [], 'publication_error': '成片收录失败：' + redact(str(exc))}
                 with self.lock:
                     job.update(status='cancelled' if job['status']=='cancelling' else 'interrupted' if code is None else 'succeeded' if code==0 else 'failed',
-                               returncode=code,finished_at=time.time())
+                               returncode=code,finished_at=time.time(), **publication)
                     if code is None and job['status']!='cancelled':
                         job['error']='原进程已结束，但服务中断期间的退出码不可恢复；请检查产物和验证报告'
                     self.processes.pop(job_id,None)
