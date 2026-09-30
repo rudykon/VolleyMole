@@ -1,13 +1,14 @@
-"""Ten bilingual, code-native title systems; source artwork remains untouched."""
+"""Bilingual, code-native title systems; source artwork remains untouched."""
 from dataclasses import dataclass
+from pathlib import Path
 from .common import APP
 from .assets import asset_root
 from .font_support import load_font, font_assets, normalize_text, text_units
 
 FONTS=asset_root()/'fonts'
-STYLES=('editorial','arena','cinema','pop','minimal')
+STYLES=('editorial','arena','cinema','pop','minimal','sumi')
 TEMPLATE_IDS=('legacy',)+tuple(f'{style}-{lang}' for style in STYLES for lang in ('zh','en'))
-LABELS={'editorial':'刊物编辑','arena':'竞技速报','cinema':'电影片名','pop':'潮流贴纸','minimal':'极简栏目'}
+LABELS={'editorial':'刊物编辑','arena':'竞技速报','cinema':'电影片名','pop':'潮流贴纸','minimal':'极简栏目','sumi':'水墨题签'}
 
 
 @dataclass(frozen=True)
@@ -17,9 +18,14 @@ class TitleTemplate:
 
     @property
     def font(self):
+        if self.style=='sumi' and self.language=='zh':
+            # The frozen sumi bundle carries the exact approved Kai collection.
+            # Older asset installs can still use a system Kai or Serif fallback.
+            for path in (FONTS/'ukai.ttc',Path('/usr/share/fonts/truetype/arphic/ukai.ttc')):
+                if path.is_file():return path
         if self.language=='en':
-            return FONTS/({'cinema':'NotoSerif-Regular.ttf','arena':'NotoSans-BoldItalic.ttf'}.get(self.style,'NotoSans-Bold.ttf'))
-        return FONTS/({'cinema':'NotoSerifCJKsc-Regular.otf','pop':'ZCOOLKuaiLe-Regular.ttf'}.get(self.style,'NotoSansCJKsc-Bold.otf'))
+            return FONTS/({'cinema':'NotoSerif-Regular.ttf','sumi':'NotoSerif-Regular.ttf','arena':'NotoSans-BoldItalic.ttf'}.get(self.style,'NotoSans-Bold.ttf'))
+        return FONTS/({'cinema':'NotoSerifCJKsc-Regular.otf','sumi':'NotoSerifCJKsc-Regular.otf','pop':'ZCOOLKuaiLe-Regular.ttf'}.get(self.style,'NotoSansCJKsc-Bold.otf'))
 
 
 def get_template(name='legacy'):
@@ -63,11 +69,11 @@ def display_title(item,name):
     elif '攻防' in title or '往返' in title:pair=('来回攻防\n继续较量','BACK AND FORTH\nTHE RALLY CONTINUES')
     else:pair=('球场时刻\n一起看球','ON COURT\nIN THE MOMENT')
     result=pair[int(en)]
-    if en and get_template(name).style=='cinema':result='\n'.join(line.capitalize() for line in result.splitlines())
+    if en and get_template(name).style in ('cinema','sumi'):result='\n'.join(line.capitalize() for line in result.splitlines())
     return result
 
 
-def text_layer(text,size,fill,max_width,name,outline=None,tracking=0,font_path=None):
+def text_layer(text,size,fill,max_width,name,outline=None,tracking=0,font_path=None,outline_width=2):
     """Measure actual glyph bounds, including stroke and spacing, before fitting."""
     from PIL import Image,ImageDraw
     import math
@@ -76,7 +82,7 @@ def text_layer(text,size,fill,max_width,name,outline=None,tracking=0,font_path=N
     text=normalize_text(' '.join(str(text).split()))
     if not text:raise ValueError('标题文字不能为空')
     if max_width<24:raise ValueError('文字可用宽度过小')
-    stroke=2 if outline is not None else 0
+    stroke=outline_width if outline is not None else 0
     units=text_units(text)
     for fitted in range(size,3,-1):
         font=load_font(text,path,fitted)
@@ -128,12 +134,13 @@ def headline(title,name,ink,accent,paper,box=(608,260)):
         positions=(30,143)
     elif style=='arena':sizes=(86,72) if lang=='zh' else (74,54);positions=(16,130)
     elif style=='cinema':sizes=(65,56) if lang=='zh' else (66,49);positions=(18,140)
+    elif style=='sumi':sizes=(72,30) if lang=='zh' else (62,28);positions=(32,156)
     elif style=='pop':sizes=(86,72) if lang=='zh' else (78,52);positions=(10,135)
     else:sizes=(72,56) if lang=='zh' else (67,45);positions=(36,151)
     for index,line in enumerate(lines):
         fill=ink
         if style=='arena':fill=paper
-        tracking=(5 if lang=='zh' else 1.5) if style=='cinema' else 0
+        tracking=(5 if lang=='zh' else 1.5) if style=='cinema' else (3 if lang=='zh' else 1) if style=='sumi' else 0
         pad=36 if style in ('arena','pop') else 16
         layer=text_layer(line,sizes[index],fill,width-pad,name,tracking=tracking)
         x=8 if style in ('editorial','arena') else (width-layer.width)//2
@@ -156,6 +163,7 @@ def headline(title,name,ink,accent,paper,box=(608,260)):
             canvas.alpha_composite(backing,(x,y))
         canvas.alpha_composite(layer,(x,y))
     if style=='cinema':draw.line((width//2-30,119,width//2+30,119),fill=accent,width=1)
+    if style=='sumi':draw.line((width//2-18,133,width//2+18,133),fill=accent,width=1)
     if style=='minimal':
         draw.line((width//2-18,14,width//2+18,14),fill=accent,width=3)
         draw.line((width//2-55,132,width//2+55,132),fill=ink,width=1)

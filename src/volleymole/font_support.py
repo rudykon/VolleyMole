@@ -32,7 +32,7 @@ class FontCoverageError(ValueError):
 def _candidates(preferred):
     preferred = Path(preferred)
     bundled = list(BUNDLED_FONTS)
-    if 'serif' in preferred.name.lower():
+    if any(style in preferred.name.lower() for style in ('serif','kai')):
         bundled.sort(key=lambda p: 'serif' not in p.name.lower())
     return tuple(dict.fromkeys((preferred, *bundled, *SYSTEM_FONTS)))
 

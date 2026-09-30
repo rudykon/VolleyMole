@@ -100,12 +100,11 @@ class Workspace:
                            for x in entries[offset:offset+200]],'offset':offset}
 
     def templates(self):
-        from ..templates import BUILTINS, read_template
+        from ..templates import template_entries, read_template
         result=[]
-        for root,builtin in ((BUILTINS,True),(self.root/'templates',False)):
-            for p in sorted(root.glob('*.json')):
-                try: result.append({**read_template(p),'builtin':builtin})
-                except (ValueError,OSError): continue
+        for p,builtin in template_entries(self.path('templates')):
+            try: result.append({**read_template(p),'builtin':builtin})
+            except (ValueError,OSError): continue
         return result
 
     def resources(self):
@@ -418,10 +417,10 @@ class Handler(BaseHTTPRequestHandler):
             if url.path.startswith('/api/cancel/'):
                 return self.send_json(self.app.jobs.cancel(url.path.rsplit('/',1)[-1]))
             if url.path=='/api/templates':
-                from ..templates import BUILTINS,write_template,validate
+                from ..templates import builtin_directory,write_template,validate
                 doc=validate(body)
-                if (BUILTINS/(doc['name']+'.json')).exists(): raise ValueError('内置模板不可覆盖，请修改名称后另存')
-                path=self.app.path('templates/'+doc['name']+'.json')
+                if (builtin_directory(self.app.path('templates'))/(doc['name']+'.json')).exists(): raise ValueError('内置模板不可覆盖，请修改名称后另存')
+                path=self.app.path('templates/custom/'+doc['name']+'.json')
                 write_template(doc,path)
                 return self.send_json({'path':self.app.relative(path)},201)
             if url.path=='/api/settings': return self.send_json(self.app.save_settings(body))

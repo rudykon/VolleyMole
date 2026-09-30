@@ -10,9 +10,10 @@ src/volleymole/   CLI、模型适配、推理、回合、排名与渲染
 tests/           自动测试及另行执行的真实模型测试
 scripts/         发布检查、素材准备、预览和评测工具
 docs/            使用说明、设计预览与评测资料
+templates/       统一模板库：builtin/、custom/、bundles/
 ```
 
-`models/`、`data/`、`runs/`、`outputs/`、`templates/`、`.local/` 和 `.venv/` 是本地目录，不提交 Git。内置模板位于 `src/volleymole/templates/`，随包发布。项目运行不依赖 `tools/`。
+`models/`、`data/`、`runs/`、`outputs/`、`templates/custom/`、`templates/bundles/`、`.local/` 和 `.venv/` 是本地目录，不提交 Git。内置模板以 `templates/builtin/` 为唯一源码位置，随包发布；模板库说明也随源码保存。项目运行不依赖 `tools/`。
 
 ## 开发与验证
 

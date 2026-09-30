@@ -25,7 +25,7 @@ def build(source, output, version, manifest):
         if (name != 'README.md' and name.split('/')[0] not in
                 ('fonts', 'branding', 'illustrated', 'transitions', 'design_suites')):
             raise ValueError(f'Not a presentation asset: {name}')
-        if path.suffix.lower() not in ('.png', '.svg', '.ttf', '.otf', '.json', '.txt', '.md'):
+        if path.suffix.lower() not in ('.png', '.svg', '.ttf', '.otf', '.ttc', '.json', '.txt', '.md'):
             raise ValueError(f'Unexpected asset type: {name}')
         blob = path.read_bytes()
         files[name] = {'bytes': len(blob), 'sha256': hashlib.sha256(blob).hexdigest()}
@@ -62,7 +62,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, default=ROOT/'src/volleymole/assets')
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--version', default='assets-v1')
+    parser.add_argument('--version', default='assets-v2')
     parser.add_argument('--manifest', type=Path, default=ROOT/'src/volleymole/asset_manifest.json')
     args = parser.parse_args()
     build(args.source, args.output, args.version, args.manifest)

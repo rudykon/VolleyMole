@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "version": "assets-v1",
+  "version": "assets-v2",
   "archive": {
-    "url": "https://github.com/rudykon/VolleyMole/releases/download/assets-v1/volleymole-assets-v1.zip",
-    "bytes": 94340439,
-    "sha256": "ffb9b89962cf793c389f10d1ccfdd7da84121294445c524a83ce63ba18af6aeb"
+    "url": "https://github.com/rudykon/VolleyMole/releases/download/assets-v2/volleymole-assets-v2.zip",
+    "bytes": 104245104,
+    "sha256": "748f7b474893089b2999de48cf8fb412b8807c15d817aab8abfeac51d95fc515"
   },
   "files": {
     "README.md": {
-      "bytes": 6443,
-      "sha256": "b7fdef7b217da6f8b459cc009bcb44a9d75cee5d2a92b4207a27abc01f4d4cda"
+      "bytes": 6715,
+      "sha256": "53afc2d09322ea0226dcb9f62debf3553089ad944ef1558b6ab77283ff6d2a0e"
     },
     "branding/volleymole.json": {
       "bytes": 263,
@@ -31,6 +31,10 @@
       "bytes": 1593,
       "sha256": "348364ee01a813b8e3c21d7b09a3a617eef097ed44d8ba33053d30249ec8d3ab"
     },
+    "fonts/ARPHICPL.TXT": {
+      "bytes": 8133,
+      "sha256": "1f11c4a22865e1289f4694dad56b3561790a4b7341a511ddcd0edddcc3b95a46"
+    },
     "fonts/NOTICE-Noto-CJK.txt": {
       "bytes": 14712,
       "sha256": "849f4ea9c214fa4ac3593b770c699f387534b11ce671264c1b10d85bdcb5997b"
@@ -38,6 +42,10 @@
     "fonts/NOTICE-Noto-Core.txt": {
       "bytes": 5208,
       "sha256": "075f91382875da1c4b491f1facf2586f55448705133264d98ce15cab6211b125"
+    },
+    "fonts/NOTICE-UKai.txt": {
+      "bytes": 447,
+      "sha256": "337a3b6740538fe94bd3a914831f09a31cbe68aa5049d2afbce48006c3ea525b"
     },
     "fonts/NotoSans-Bold.ttf": {
       "bytes": 515752,
@@ -66,6 +74,10 @@
     "fonts/ZCOOLKuaiLe-Regular.ttf": {
       "bytes": 1514968,
       "sha256": "812a6fc1fe54b6d73a419245c32dfeba8aa33104d5be90d1cf6af082007cb71d"
+    },
+    "fonts/ukai.ttc": {
+      "bytes": 17151049,
+      "sha256": "cfc758e69386a21bade8cb3b373fda20d7f2fac6e8904ced2ded98588b63e274"
     },
     "illustrated/prompts-ranked.json": {
       "bytes": 5391,

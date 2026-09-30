@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "volleymole"
-version = "0.2.0"
+version = "0.3.0"
 description = "PTS-based, resumable volleyball top-five/top-ten editing"
 readme = "README.md"
 license = "MIT"
@@ -30,10 +30,13 @@ where = ["src"]
 namespaces = false
 
 [tool.setuptools.package-data]
-volleymole = ["*.json", "templates/*.json", "prompts/*.md", "assets/**/*", "licenses/*", "web/static/*", "web/static/previews/*"]
+volleymole = ["*.json", "prompts/*.md", "assets/**/*", "licenses/*", "web/static/*", "web/static/previews/*"]
+
+[tool.setuptools.data-files]
+"share/volleymole/templates/builtin" = ["templates/builtin/*.json"]
 
 [tool.setuptools.exclude-package-data]
-volleymole = ["assets/**/*.png", "assets/**/*.ttf", "assets/**/*.otf"]
+volleymole = ["assets/**/*.png", "assets/**/*.ttf", "assets/**/*.otf", "assets/**/*.ttc"]
 
 [tool.uv]
 environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]

@@ -5,9 +5,14 @@ import math
 import os
 from pathlib import Path
 import re
+import shutil
 import sys
 
-BUILTINS = Path(__file__).with_name('templates')
+PROJECT = Path(__file__).resolve().parents[2]
+SOURCE_LIBRARY = PROJECT / 'templates'
+# Wheels carry installation seeds; every active library keeps its own presets.
+BUILTINS = (SOURCE_LIBRARY / 'builtin' if (PROJECT / 'pyproject.toml').is_file()
+            else Path(sys.prefix) / 'share/volleymole/templates/builtin')
 MAX_BYTES = 64 * 1024
 
 
@@ -122,8 +127,54 @@ def read_template(path):
         raise ValueError('模板必须是 UTF-8 JSON 文件') from exc
 
 
+def library_directory(directory=None):
+    """One stable library root, independent of the caller's working directory."""
+    selected = directory or os.environ.get('VOLLEYMOLE_TEMPLATES')
+    if selected:
+        return Path(selected).expanduser().resolve()
+    if os.environ.get('VOLLEYMOLE_WORKSPACE'):
+        return Path(os.environ['VOLLEYMOLE_WORKSPACE']).expanduser().resolve() / 'templates'
+    if (PROJECT / 'pyproject.toml').is_file():
+        return SOURCE_LIBRARY
+    base = Path(os.environ.get('XDG_DATA_HOME', Path.home() / '.local/share')).expanduser()
+    return (base / 'volleymole/templates').resolve()
+
+
+def builtin_directory(directory=None):
+    root = library_directory(directory) / 'builtin'
+    if root == BUILTINS:
+        return root
+    # A fresh workspace/installed application gets local copies once. Existing
+    # files, including a user's edits, are never replaced by discovery.
+    seeds = sorted(BUILTINS.glob('*.json'))
+    if not seeds:
+        raise ValueError('缺少内置模板，请重新安装完整应用包')
+    root.mkdir(parents=True, exist_ok=True)
+    for source in seeds:
+        target = root / source.name
+        if target.exists():
+            continue
+        try:
+            with target.open('xb') as output, source.open('rb') as input_file:
+                shutil.copyfileobj(input_file, output)
+        except FileExistsError:
+            pass
+    return root
+
+
 def local_directory(directory=None):
-    return Path(directory or os.environ.get('VOLLEYMOLE_TEMPLATES', Path.cwd() / 'templates')).expanduser()
+    return library_directory(directory) / 'custom'
+
+
+def template_entries(directory=None):
+    root = library_directory(directory)
+    seen = set()
+    # The root-level reader preserves older user libraries; new saves use custom/.
+    for folder, builtin in ((builtin_directory(root), True), (root / 'custom', False), (root, False)):
+        for path in sorted(folder.glob('*.json')):
+            if path.stem not in seen:
+                seen.add(path.stem)
+                yield path, builtin
 
 
 def load_template(selection, directory=None):
@@ -132,11 +183,10 @@ def load_template(selection, directory=None):
         return read_template(Path(selection).expanduser())
     if not re.fullmatch(r'[\w-]{1,64}', selection):
         raise ValueError('请指定模板名称或 JSON 文件路径')
-    builtin = BUILTINS / f'{selection}.json'
-    path = builtin if builtin.is_file() else local_directory(directory) / f'{selection}.json'
-    if not path.is_file():
-        raise ValueError(f'模板不存在：{selection}；用 volleymole templates list 查看')
-    return read_template(path)
+    for path, _ in template_entries(directory):
+        if path.stem == selection:
+            return read_template(path)
+    raise ValueError(f'模板不存在：{selection}；用 volleymole templates list 查看')
 
 
 def write_template(document, path):
@@ -180,7 +230,7 @@ class TemplateArgumentParser(argparse.ArgumentParser):
 
 def argument_parser():
     parser = argparse.ArgumentParser(description='导入、导出和查看成片模板；不运行推理或 API')
-    parser.add_argument('--directory', type=Path, help='本地模板库，默认 ./templates 或 VOLLEYMOLE_TEMPLATES')
+    parser.add_argument('--directory', type=Path, help='统一模板库根目录；默认项目 templates，支持 VOLLEYMOLE_TEMPLATES')
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('list', help='列出内置和本地模板')
     show = commands.add_parser('show', help='查看模板 JSON')
@@ -199,12 +249,11 @@ def argument_parser():
 def main(argv=None):
     parser = argument_parser()
     args = parser.parse_args(argv)
-    directory = local_directory(args.directory)
+    directory = library_directory(args.directory)
     if args.command == 'list':
-        for root, label in ((BUILTINS, '内置'), (directory, '本地')):
-            for path in sorted(root.glob('*.json')):
-                doc = read_template(path)
-                print(f'{path.stem:16} {label}  {doc.get("description", "")}')
+        for path, builtin in template_entries(directory):
+            doc = read_template(path)
+            print(f'{path.stem:16} {"内置" if builtin else "个人"}  {doc.get("description", "")}')
         return
     if args.command == 'show':
         print(json.dumps(load_template(args.template, directory), ensure_ascii=False, indent=2))
@@ -214,9 +263,11 @@ def main(argv=None):
         if args.name:
             document['name'] = args.name
         validate(document)
-        if (BUILTINS / f'{document["name"]}.json').exists():
+        if (builtin_directory(directory) / f'{document["name"]}.json').exists():
             parser.error('名称与内置模板冲突，请用 --name 指定自己的名称')
-        target = directory / f'{document["name"]}.json'
+        if (directory / f'{document["name"]}.json').exists():
+            raise FileExistsError('旧目录已有同名个人模板，请用 --name 指定新名称')
+        target = local_directory(directory) / f'{document["name"]}.json'
     else:
         if bool(args.template) == bool(args.from_run):
             parser.error('指定一个模板名称/文件，或 --from-run 目录，二者只能选一')

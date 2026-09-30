@@ -10,6 +10,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 LOCAL_DIRS = {'data','models','runs','outputs','reports','templates','.local','refer','tools','.venv','venv','.agents','.codex','build','dist'}
 LOCAL_NAMES = {'llm_api.json','github_token.json','.env'}
+PUBLIC_TEMPLATES = {'templates/README.md', *(f'templates/builtin/{name}.json'
+                    for name in ('archive', 'atelier', 'aurora', 'matchday', 'sumi'))}
 MEDIA = {'.pt','.pth','.onnx','.safetensors','.engine','.plan','.mp4','.mov','.avi','.mkv','.webm',
          '.m4v','.mts','.m2ts','.wav','.mp3','.m4a','.aac','.flac','.ogg','.log','.jsonl',
          '.tmp','.partial','.zip','.tar','.gz','.tgz','.7z','.pem','.key'}
@@ -60,7 +62,7 @@ def main():
     largest=0
     for name in sorted(published):
         path=ROOT/name
-        if (Path(name).parts[0] in LOCAL_DIRS or path.name in LOCAL_NAMES or
+        if ((Path(name).parts[0] in LOCAL_DIRS and name not in PUBLIC_TEMPLATES) or path.name in LOCAL_NAMES or
                 (path.name.startswith('.env.') and path.name!='.env.example') or path.suffix.lower() in MEDIA):
             issues.append(f'{name}: local-only file is visible to Git')
             continue

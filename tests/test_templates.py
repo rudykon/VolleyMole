@@ -9,7 +9,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from volleymole.templates import BUILTINS, load_template, main, read_template, write_template
+from volleymole.templates import (BUILTINS, library_directory, local_directory,
+                                  load_template, main, read_template, write_template)
 from volleymole.run_match import argument_parser
 
 
@@ -52,11 +53,46 @@ class TemplateTests(unittest.TestCase):
                 self.assertEqual(args.template_snapshot['audio'], self.document['audio'])
         with self.assertRaises(FileExistsError):
             main(['--directory', str(library), 'import', str(self.path)])
-        self.assertEqual(read_template(library / 'my-team.json'), self.document)
+        self.assertEqual(read_template(library / 'custom/my-team.json'), self.document)
         exported = self.root / 'export.json'
         with contextlib.redirect_stdout(io.StringIO()):
             main(['--directory', str(library), 'export', 'my-team', '--output', str(exported)])
         self.assertEqual(read_template(exported), self.document)
+
+    def test_default_library_stays_fixed_when_working_directory_changes(self):
+        with patch.dict(os.environ, {}, clear=True):
+            original = library_directory()
+            with contextlib.chdir(self.root):
+                self.assertEqual(library_directory(), original)
+                self.assertEqual(local_directory(), original / 'custom')
+                self.assertEqual(load_template('sumi')['options']['design_suite'], 'sumi')
+
+    def test_workspace_library_contains_builtins_and_custom_without_overwrite(self):
+        workspace = self.root / 'workspace'
+        with patch.dict(os.environ, {'VOLLEYMOLE_WORKSPACE': str(workspace)}, clear=True):
+            self.assertEqual(library_directory(), workspace / 'templates')
+            expected = load_template('sumi')
+            builtin = workspace / 'templates/builtin/sumi.json'
+            self.assertEqual(read_template(builtin), expected)
+            with contextlib.redirect_stdout(io.StringIO()):
+                main(['import', str(self.path)])
+            self.assertEqual(load_template('my-team'), self.document)
+            self.assertTrue((workspace / 'templates/custom/my-team.json').is_file())
+            expected['description'] = '保留已有修改'
+            builtin.write_text(json.dumps(expected))
+            self.assertEqual(load_template('sumi'), expected)
+
+    def test_legacy_flat_presets_remain_readable_and_catalog_is_unique(self):
+        library = self.root / 'library'
+        write_template(self.document, library / 'my-team.json')
+        self.assertEqual(load_template('my-team', library), self.document)
+        updated = {**self.document, 'description': '新版位置'}
+        write_template(updated, library / 'custom/my-team.json')
+        self.assertEqual(load_template('my-team', library), updated)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            main(['--directory', str(library), 'list'])
+        self.assertEqual(output.getvalue().count('my-team'), 1)
 
     def test_parser_does_not_leak_template_defaults_into_next_invocation(self):
         parser = argument_parser()

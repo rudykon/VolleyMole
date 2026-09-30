@@ -12,8 +12,8 @@ from volleymole.title_templates import TEMPLATE_IDS,get_template,headline,templa
 
 
 class TitleTemplateTests(unittest.TestCase):
-    def test_ten_bilingual_templates_and_packaged_fonts(self):
-        self.assertEqual(len(TEMPLATE_IDS),11)
+    def test_bilingual_templates_and_packaged_fonts(self):
+        self.assertEqual(len(TEMPLATE_IDS),13)
         for name in TEMPLATE_IDS[1:]:
             for path in template_assets(name):self.assertTrue(path.is_file(),path)
             self.assertIn(get_template(name).font,asset_paths('manga',name))
@@ -60,7 +60,7 @@ class TitleTemplateTests(unittest.TestCase):
             card=title_card(item,title,DEFAULT_FONT,10,'manga',name)
             self.assertEqual(card.size,(720,1280))
             cards.append(card.tobytes())
-        self.assertEqual(len(set(cards)),10)
+        self.assertEqual(len(set(cards)),12)
 
     def test_concurrent_templates_are_isolated(self):
         def render(name):

@@ -1,0 +1,8 @@
+AR PL UKai 字体集合
+
+来源：本机 Debian/Ubuntu fonts-arphic-ukai 软件包。
+原始文件：/usr/share/fonts/truetype/arphic/ukai.ttc
+完整集合逐字节复制，未修改、转换或裁剪字形。
+水墨中文模板使用第 0 个字面 AR PL UKai CN。
+随附 ARPHICPL.TXT 原样保存系统软件包 copyright 文件，内含完整 ARPHIC PUBLIC LICENSE。
+这是 2026-09-30 用户确认的水墨模板 v2.0.0 所使用的字体。

@@ -962,7 +962,7 @@ wheels = [
 
 [[package]]
 name = "volleymole"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "av", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },

@@ -25,7 +25,9 @@
 | `build_asset_bundle.py` | 将本地视觉素材打包为固定版本 ZIP，并生成大小、逐文件 SHA-256 和 Release 附件；不打包模型或录像 |
 | `check_release.py` | 仅使用 Python 标准库；检查待发布文件，支持 `--history` |
 | `preview_art_themes.py` | 无需 GPU、模型或 API，检查透明素材并导出实际标题卡、角标及 HTML 图集 |
-| `preview_title_templates.py` | 十套中英标题与五套插画组合预览；无需 GPU、模型或 API |
+| `preview_title_templates.py` | 十二套中英标题与五套插画组合预览；无需 GPU、模型或 API |
+| `freeze_sumi_template.py` | 将确认版水墨模板连同源码、字体、素材和预览封存到 `templates/bundles/`，拒绝覆盖已有版本 |
+| `sumi_frozen.py` | 复制进定稿包的入口，校验文件、复现预览并使用封存模板剪辑 |
 | `preview_transitions.py` | 五套动画转场视频预览、编码校验与透明 ProRes 4444 导出；需要 FFmpeg，无需 GPU 或 API |
 | `preview_design_suites.py` | 五套完整设计的动画、角标与图集；`--language en/zh/both` 选择语言，默认 1080p；可复用已有运行制作短实拍样片 |
 | `prepare_title_fonts.py` | 开发用字体集合 SC 字面提取，需要 FontTools；正常运行无需执行 |

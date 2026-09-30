@@ -62,7 +62,7 @@ clearance opinion.
 ## Presentation asset distribution
 
 Complete illustrations, font binaries, branding and transition plates are distributed
-separately in the versioned `assets-v1` GitHub Release. The source repository and
+separately in the versioned `assets-v2` GitHub Release. The source repository and
 wheel include the pinned `asset_manifest.json`, source records and license notices;
 `volleymole assets fetch` installs the pack into the user cache and validates hashes.
 The archive preserves all font notices below. Model weights, datasets and match
@@ -138,3 +138,7 @@ glass-volleyball illustration generated with the same built-in tool; its
 unaltered PNG, prompt and hash are retained in `assets/design_suites/`.
 Typography, suite layouts, animation masks and generated transition sound
 envelopes are code-native; no third-party motion-template pack is bundled.
+
+## AR PL UKai
+
+The sumi Chinese title template uses face 0 (AR PL UKai CN) from the complete, unmodified `ukai.ttc` collection distributed in the Debian/Ubuntu `fonts-arphic-ukai` package. The font is included in `assets-v2` and the frozen sumi template bundle. It retains the ARPHIC PUBLIC LICENSE; see `src/volleymole/assets/fonts/ARPHICPL.TXT` and `NOTICE-UKai.txt`. The project MIT license does not replace the font license.

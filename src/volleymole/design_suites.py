@@ -39,7 +39,7 @@ SUITES = (
                 (24,25,26),(246,240,224),(239,76,43),(239,76,43),True),
     DesignSuite('atelier','纸上球场','COURT ATELIER','papercut','editorial','paper',
                 (48,62,51),(245,239,222),(204,117,87),(142,158,127)),
-    DesignSuite('sumi','墨间回合','INK & MOTION','ink','cinema','ink',
+    DesignSuite('sumi','墨间回合','INK & MOTION','ink','sumi','ink',
                 (37,44,41),(244,242,230),(167,69,51),(119,149,131)),
     DesignSuite('aurora','极光棱镜','PRISM COURT','clay','minimal','prism',
                 (12,20,40),(233,241,250),(134,200,245),(169,158,239),True),
@@ -164,30 +164,37 @@ class SuiteCard:
         logo=sticker(LOGO_PNG,(216,59))
         if s.dark: front.rounded_rectangle((43,44,273,112),radius=3,fill=s.paper)
         self.foreground.alpha_composite(logo,(50,48))
-        collection=text_layer(s.collection,16,fg,355,self.template,tracking=1,font_path=FONTS/'NotoSans-Bold.ttf')
+        collection=text_layer(s.label if name=='sumi' and language=='zh' else s.collection,16,fg,355,self.template,
+                              tracking=3 if name=='sumi' else 1,
+                              font_path=None if name=='sumi' else FONTS/'NotoSans-Bold.ttf')
         self.foreground.alpha_composite(collection,(672-collection.width,64))
-        label=text_layer(rank_label(item['rank'],top_k,self.template,item.get('collection','highlights')),28,fg,610,self.template)
+        label=text_layer(rank_label(item['rank'],top_k,self.template,item.get('collection','highlights')),24 if name=='sumi' else 28,fg,610,self.template)
         centered=name in ('sumi','aurora','archive')
         self.foreground.alpha_composite(label,((720-label.width)//2 if centered else 42,172))
         lines=title.splitlines()
         if not 1<=len(lines)<=2: raise ValueError('套装标题须为一到两行')
         sizes=(100,59) if language=='zh' else (76,40)
         if name in ('sumi','archive'): sizes=(84,55) if language=='zh' else (69,39)
+        if name=='sumi': sizes=(78,28) if language=='zh' else (65,26)
+        quiet=tuple(round(a*.7+b*.3) for a,b in zip(s.ink,s.paper))
         for i,line in enumerate(lines):
-            layer=text_layer(line,sizes[i],fg if i==0 else (s.secondary if s.dark else s.ink),624,self.template,
-                             tracking=4 if name=='sumi' and language=='zh' else 0)
+            fill=quiet if name=='sumi' and i==1 else fg if i==0 else (s.secondary if s.dark else s.ink)
+            layer=text_layer(line,sizes[i],fill,624,self.template,
+                             tracking=(5 if i==0 else 3) if name=='sumi' and language=='zh' else 0)
             if name=='matchday' and language=='zh':
                 extra=round(layer.height*.10)
                 layer=layer.transform((layer.width+extra,layer.height),Image.Transform.AFFINE,
                     (1,.10,-extra,0,1,0),Image.Resampling.BICUBIC)
             x=(720-layer.width)//2 if centered else 40
             self.foreground.alpha_composite(layer,(x,244 if i==0 else 376))
-        front.line((48,1101,672,1101),fill=s.accent,width=1)
+        if name=='sumi':front.line((338,350,382,350),fill=s.accent,width=1)
+        front.line((48,1101,672,1101),fill=s.secondary if name=='sumi' else s.accent,width=1)
         caption=text_layer(words(self.template,'caption'),20,fg,320,self.template)
         self.foreground.alpha_composite(caption,(40,1122))
-        count=text_layer(f'{item["rank"]:02d} / {top_k:02d}',20,fg,200,self.template,font_path=FONTS/'NotoSans-Bold.ttf')
+        count=text_layer(f'{item["rank"]:02d} / {top_k:02d}',20,fg,200,self.template,
+                         font_path=None if name=='sumi' else FONTS/'NotoSans-Bold.ttf')
         self.foreground.alpha_composite(count,(672-count.width,1122))
-        footer=text_layer(words(self.template,'footer'),16,fg,625,self.template)
+        footer=text_layer(words(self.template,'footer'),16,quiet if name=='sumi' else fg,625,self.template)
         self.foreground.alpha_composite(footer,(40,1198))
         boxes={'matchday':(570,530),'atelier':(520,508),'sumi':(468,482),'aurora':(522,522),'archive':(478,478)}
         self.hero=_fit_art(hero_path(item,name),boxes[name])
@@ -227,20 +234,22 @@ def suite_headers(item,top_k,title,name,language='zh'):
     canvas=Image.new('RGBA',(720,110))
     draw=ImageDraw.Draw(canvas)
     # Compact, flat label rather than a mismatched illustrated ribbon.
-    draw.rounded_rectangle((18,24,284,86),radius=2 if name!='aurora' else 9,fill=s.ink)
+    draw.rounded_rectangle((18,24,284,86),radius=2 if name!='aurora' else 9,fill=s.paper if name=='sumi' else s.ink)
     draw.rectangle((18,24,23,86),fill=s.accent)
-    label=text_layer(rank_label(item['rank'],top_k,template,item.get('collection','highlights')),26,s.paper,247,template)
+    label=text_layer(rank_label(item['rank'],top_k,template,item.get('collection','highlights')),26,s.ink if name=='sumi' else s.paper,247,template)
     canvas.alpha_composite(label,(27+(247-label.width)//2,55-label.height//2))
-    heading=text_layer(title.splitlines()[0],32,s.paper,396,template,outline=s.ink)
-    canvas.alpha_composite(heading,(301,14))
-    sub=text_layer(chapter_label(item['rank'],top_k,template),17,s.paper,340,template,outline=s.ink)
-    canvas.alpha_composite(sub,(303,65))
+    heading=text_layer(title.splitlines()[0],30 if name=='sumi' else 32,s.paper,396,template,
+                       outline=s.ink,outline_width=1 if name=='sumi' else 2)
+    canvas.alpha_composite(heading,(301,55-heading.height//2 if name=='sumi' else 14))
+    if name!='sumi':
+        sub=text_layer(chapter_label(item['rank'],top_k,template),17,s.paper,340,template,outline=s.ink)
+        canvas.alpha_composite(sub,(303,65))
     frames=[]
     for i in range(16):
         frame=canvas.copy();d=ImageDraw.Draw(frame)
         p=min(1.,i/12)
         eased=1-(1-p)**(4 if name=='matchday' else 3)
-        d.line((309,103,309+round(355*eased),103),fill=s.accent,width=2)
+        d.line((309,95 if name=='sumi' else 103,309+round((52 if name=='sumi' else 355)*eased),95 if name=='sumi' else 103),fill=s.accent,width=1 if name=='sumi' else 2)
         frames.append(cv2.cvtColor(np.asarray(frame),cv2.COLOR_RGBA2BGRA))
     return frames
 
@@ -249,6 +258,20 @@ def suite_overlay(path,kind,index,name,language='zh'):
     from PIL import Image,ImageDraw
     s=get_suite(name);template=s.template(language)
     canvas=Image.new('RGBA',(720,1280));draw=ImageDraw.Draw(canvas)
+    if name=='sumi':
+        if kind=='teaser':
+            draw.line((30,29,30,80),fill=s.accent,width=2)
+            title=text_layer(words(template,'teaser'),34,s.paper,635,template,outline=s.ink,tracking=2,outline_width=1)
+            canvas.alpha_composite(title,(44,12))
+            sub=text_layer(words(template,'teaser_sub'),16,s.paper,635,template,outline=s.ink,outline_width=1)
+            canvas.alpha_composite(sub,(46,65))
+        else:
+            title=text_layer(words(template,'replay'),25,s.paper,185,template,outline=s.ink,outline_width=1)
+            canvas.alpha_composite(title,(29,130))
+            speed=text_layer('0.67×',20,s.paper,125,template,outline=s.ink,outline_width=1)
+            canvas.alpha_composite(speed,(37+title.width,135))
+        canvas.save(path)
+        return
     if kind=='teaser':
         draw.rectangle((28,23,33,89),fill=s.accent)
         title=text_layer(words(template,'teaser'),39,s.paper,643,template,outline=s.ink)

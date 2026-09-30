@@ -19,8 +19,11 @@ outputs/
 reports/
 .local/
 .playwright-mcp/
-# Personal presets; built-in presets under src/ are published.
-/templates/
+# Unified template library: publish built-ins and the guide, keep user data local.
+/templates/*
+!/templates/builtin/
+!/templates/builtin/*.json
+!/templates/README.md
 
 # Python environments, build output and caches
 .venv/
@@ -43,6 +46,7 @@ build/
 *.webp
 *.ttf
 *.otf
+*.ttc
 *.pt
 *.pth
 *.onnx

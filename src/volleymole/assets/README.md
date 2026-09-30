@@ -1,6 +1,6 @@
 # 插画与标题字体
 
-完整二进制素材通过 [assets-v1 Release](https://github.com/rudykon/VolleyMole/releases/tag/assets-v1) 分发。运行 `volleymole assets fetch` 安装、`volleymole assets verify` 校验；默认存放于用户缓存目录，模型与比赛录像不包含在素材包中。字体许可及生成来源记录随素材包保留。
+完整二进制素材通过 [assets-v2 Release](https://github.com/rudykon/VolleyMole/releases/tag/assets-v2) 分发。运行 `volleymole assets fetch` 安装、`volleymole assets verify` 校验；默认存放于用户缓存目录，模型与比赛录像不包含在素材包中。字体许可及生成来源记录随素材包保留。
 
 ## Codex 内置生图素材
 
@@ -38,10 +38,12 @@ aurora-ball.png（`design_suites/aurora-ball.png`） 为极光棱镜套装新增
 
 ## 中文标题字体
 
-十套中英标题模板另使用包内 `NotoSansCJKsc-Bold.otf`、`NotoSerifCJKsc-Regular.otf`、`NotoSans-Bold.ttf`、`NotoSans-BoldItalic.ttf` 和 `NotoSerif-Regular.ttf`。前两者从已安装的 Noto CJK 字体集合提取 SC 字面，保留全部字形和字体元数据；后三者原样复制。字体本身均保留 SIL OFL 1.1，完整分发来源及许可见 [Noto CJK 声明](fonts/NOTICE-Noto-CJK.txt) 和 [Noto Core 声明](fonts/NOTICE-Noto-Core.txt)。声明中的 Debian 打包文件许可与字体本身的 OFL 条目分开记录；本项目没有复制 Debian 打包源码。模板用法见 [标题模板指南](../../../docs/标题模板指南.md)。
+十二套中英标题模板另使用包内 `NotoSansCJKsc-Bold.otf`、`NotoSerifCJKsc-Regular.otf`、`NotoSans-Bold.ttf`、`NotoSans-BoldItalic.ttf` 和 `NotoSerif-Regular.ttf`。前两者从已安装的 Noto CJK 字体集合提取 SC 字面，保留全部字形和字体元数据；后三者原样复制。字体本身均保留 SIL OFL 1.1，完整分发来源及许可见 [Noto CJK 声明](fonts/NOTICE-Noto-CJK.txt) 和 [Noto Core 声明](fonts/NOTICE-Noto-Core.txt)。声明中的 Debian 打包文件许可与字体本身的 OFL 条目分开记录；本项目没有复制 Debian 打包源码。模板用法见 [标题模板指南](../../../docs/标题模板指南.md)。
 
 `fonts/ZCOOLKuaiLe-Regular.ttf` 是站酷快乐体，用于标题和转场大字。常规说明文字沿用运行参数中的正文字体。
 
 上述字体为运行环境的资源清单，不代表字体二进制已提交到 Git。所有文字绘制入口使用 `font_support.py` 检查字形；首选字体缺失、损坏或不能覆盖全文时尝试已部署的备用字体，不下载资源。英文趣味榜的中文事件标题因此可保留原文显示，旧版手写体也可回退显示重音字符与罕见汉字。没有任何可用字体覆盖全文时会明确失败，不输出缺字方框。完整规则和字体缓存说明见 [字体与分发](../../../docs/标题模板指南.md#字体与分发)。
 
 字体与许可证下载自 [Google Fonts 的 ZCOOL KuaiLe 目录](https://github.com/google/fonts/tree/main/ofl/zcoolkuaile)。版权为 The ZCOOL KuaiLe Project Authors；随字体保留原始 [SIL OFL 1.1 许可证](https://raw.githubusercontent.com/google/fonts/main/ofl/zcoolkuaile/OFL.txt)，本地文件为 `fonts/OFL-ZCOOLKuaiLe.txt`。
+
+水墨中文标题使用完整 `fonts/ukai.ttc` 集合中的 AR PL UKai CN（第 0 个字面），原文件逐字节复制，未修改或裁剪。字体随 assets-v2 分发；完整 ARPHIC PUBLIC LICENSE 见 `fonts/ARPHICPL.TXT`，来源见 `fonts/NOTICE-UKai.txt`。

@@ -59,7 +59,7 @@ volleymole templates list
 # 导出后按自己的习惯编辑
 volleymole templates export matchday --name my-team --output my-team.json
 
-# 导入本地 templates/，随后按名称使用
+# 导入统一模板库的 templates/custom/，随后按名称使用
 volleymole templates import my-team.json
 volleymole run --video data/match.mp4 --ranker rules --template my-team
 
@@ -84,6 +84,8 @@ volleymole run --video data/match.mp4 --ranker rules \
 
 使用 `design_suite: "custom"` 可自由组合插画、标题和转场。配音仍是成片后的独立步骤，同一份模板通过 `meme-audio --template my-team` 生效。完整格式、优先级和命令见[自定义成片模板](docs/自定义成片模板.md)。
 
+全部模板统一保存在 [templates/](templates/README.md)：`builtin/` 存放五套内置配置，`custom/` 存放个人配置，`bundles/` 存放带字体、素材和代码快照的定稿包。命令行和网页使用相同目录规则，项目默认位置不随启动目录改变。详见[模板目录](docs/模板目录.md)和[水墨 v2.0.0 定稿版](docs/水墨模板定稿.md)。
+
 ## 常用选项
 
 | 需求 | 参数 / 入口 |
@@ -103,10 +105,11 @@ volleymole run --video data/match.mp4 --ranker rules \
 ## 仓库内容
 
 ```text
-src/volleymole/     运行代码、内置模板、提示词与素材来源
+src/volleymole/     运行代码、提示词与素材来源
 scripts/           素材准备、评测、预览与发布检查
 tests/            回归测试
 docs/             使用指南与设计预览
+templates/        统一模板库：builtin/、custom/、bundles/
 ```
 
 视频、模型、密钥、个人模板、运行缓存、实验报告和本地归档均不提交。完整插画和字体由独立素材包分发；GitHub 保留少量预览图。

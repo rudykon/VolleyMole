@@ -343,7 +343,13 @@ class HTTPTests(unittest.TestCase):
 
     def test_templates_save_conflict_validation_and_catalog(self):
         doc={'version':1,'name':'web-test','options':{'quality':'720p','replays':False}}
-        self.assertEqual(self.request('/api/templates',doc)[0],201)
+        status,_,body=self.request('/api/templates',doc)
+        self.assertEqual(status,201)
+        self.assertEqual(json.loads(body)['path'],'templates/custom/web-test.json')
+        from volleymole.templates import load_template
+        self.assertEqual(load_template('web-test',self.root/'templates'),doc)
+        self.assertEqual(load_template('matchday',self.root/'templates')['name'],'matchday')
+        self.assertTrue((self.root/'templates/builtin/matchday.json').is_file())
         self.assertEqual(self.request('/api/templates',doc)[0],409)
         self.assertEqual(self.request('/api/templates',{**doc,'name':'matchday'})[0],400)
         self.assertEqual(self.request('/api/templates',{**doc,'name':'../escape'})[0],400)

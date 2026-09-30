@@ -1,7 +1,11 @@
 include LICENSE README.md THIRD_PARTY.md CONTRIBUTING.md uv.lock llm_api.example.json
 recursive-include docs *.md *.png
 recursive-include scripts *.py *.md
-recursive-exclude src/volleymole/assets *.png *.jpg *.jpeg *.webp *.ttf *.otf
+include templates/README.md
+recursive-include templates/builtin *.json
+recursive-exclude src/volleymole/assets *.png *.jpg *.jpeg *.webp *.ttf *.otf *.ttc
+prune templates/custom
+prune templates/bundles
 global-exclude __pycache__ *.py[cod]
 prune .local
 prune reports
