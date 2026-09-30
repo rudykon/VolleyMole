@@ -27,7 +27,6 @@ def option_schema():
         'collection': (str, ('highlights', 'bloopers', 'both')),
         'analysis_mode': (str, ('auto', 'rallies', 'events')),
         'ranker': (str, ('auto', 'rules')),
-        'focus_player': (int, None),
         'style': (str, ('classic', 'lively')),
         'art_theme': (str, THEME_IDS),
         'title_template': (str, TEMPLATE_IDS),
@@ -77,8 +76,6 @@ def validate(document):
         raise ValueError('replay_review_width 必须在 384–1280 之间')
     if not 2 <= options.get('replay_scan_fps', 4) <= options.get('replay_review_fps', 8) <= 16:
         raise ValueError('回放采样率须满足 2 <= scan <= review <= 16')
-    if 'focus_player' in options and not 0 <= options['focus_player'] <= 999:
-        raise ValueError('focus_player 必须在 0–999 之间')
     if not .5 <= options.get('replay_speed', 2/3) <= 1:
         raise ValueError('replay_speed 必须在 0.5–1.0 之间')
     if options.get('replays') is False and options.get('replay_review') == 'required':

@@ -48,20 +48,6 @@
       "bytes": 196713,
       "sha256": "2f36bd129c51a4d8afb9a23fd4816be578c65041d463d55a81d1667735070b76",
       "download": "vball"
-    },
-    "ocr_recognizer": {
-      "path": "ocr/english_g2.pth",
-      "bytes": 15143997,
-      "sha256": "e2272681d9d67a04e2dff396b6e95077bc19001f8f6d3593c307b9852e1c29e8",
-      "download": "ocr-recognizer",
-      "member": "english_g2.pth"
-    },
-    "ocr_detector": {
-      "path": "ocr/craft_mlt_25k.pth",
-      "bytes": 83152330,
-      "sha256": "4a5efbfb48b4081100544e75e1e2b57f8de3d84f213004b14b85fd4b3748db17",
-      "download": "ocr-detector",
-      "member": "craft_mlt_25k.pth"
     }
   },
   "downloads": {
@@ -80,16 +66,6 @@
       "url": "https://raw.githubusercontent.com/asigatchov/fast-volleyball-tracking-inference/637c217b6589be50eba77687d3f5fa5ca103c175/models/VballNetV1_seq9_grayscale_330_h288_w512.onnx",
       "format": "raw",
       "max_bytes": 10000000
-    },
-    "ocr-recognizer": {
-      "url": "https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english_g2.zip",
-      "format": "zip",
-      "max_bytes": 100000000
-    },
-    "ocr-detector": {
-      "url": "https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft_mlt_25k.zip",
-      "format": "zip",
-      "max_bytes": 150000000
     }
   }
 }

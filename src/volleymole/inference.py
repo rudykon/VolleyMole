@@ -67,39 +67,15 @@ def tracking(args, registry, device):
     return ['vball']
 
 
-def player(args, registry, device):
-    from .jersey import JerseyReader
-    if args.number is None:
-        save_json(args.output/'index.json', {'status':'not_requested','number':None,'detections':[]})
-        return []
-    reader = JerseyReader(registry, args.number, device, args.confidence,
-                          runtime_directory=args.output/'ocr_runtime')
-    person = Detector(registry, 'person', device, half=args.half)
-    count = 0
-    for packet in decode(args.video, max_frames=args.max_frames):
-        count += 1
-        if packet.time_sec+1e-6 >= reader.next_sample:
-            people = person.detect([packet.pixels])[0]
-            reader.consume(packet, people)
-    result = reader.result()
-    if args.max_frames is not None:
-        result['status'] = 'partial_smoke'
-    result['counts'] = {'decode_passes':1, 'decoded_frames':count, 'person_frames':person.frames}
-    save_json(args.output/'index.json', result)
-    return ['person', 'ocr_recognizer', 'ocr_detector']
-
-
 def argument_parser():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--kind', choices=['analytics','tracking','player','shared'], required=True)
+    parser.add_argument('--kind', choices=['analytics','tracking','shared'], required=True)
     parser.add_argument('--video', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--models', type=Path)
     parser.add_argument('--device', default='auto')
     parser.add_argument('--devices', type=parse_devices,
                         help='四卡共享推理：cuda:0,cuda:1,cuda:2,cuda:3（状态/动作/人物/球轨迹）')
-    parser.add_argument('--number', type=int)
-    parser.add_argument('--confidence', type=float, default=.75)
     parser.add_argument('--max-frames', type=int, help='smoke test only; never accepted as a full-match cache')
     parser.add_argument('--event-frame-cache', type=Path, help=argparse.SUPPRESS)
     parser.add_argument('--event-frame-fps', type=float, default=8, help=argparse.SUPPRESS)
@@ -134,7 +110,7 @@ def main(argv=None):
     registry = ModelRegistry(args.models)
     from .shared import shared_inference
     with UsageMonitor(args.devices or device) as usage:
-        models = {'analytics':analytics, 'tracking':tracking, 'player':player,
+        models = {'analytics':analytics, 'tracking':tracking,
                   'shared':shared_inference}[args.kind](args,registry,device)
     save_json(args.output/'telemetry.json', usage.report())
     save_json(args.output/'provenance.json', {'project':'VolleyMole', 'mode':'package_fresh_inference',

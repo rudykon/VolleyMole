@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import re
 
-GROUPS=[('analysis','分析比赛',{'inference','analytics','tracking','player','events'}),
+GROUPS=[('analysis','分析比赛',{'inference','analytics','tracking','events'}),
         ('rallies','提取回合',{'rallies','previews'}),
         ('rank','选择高光',{'rank','ranking','replay_reviews'}),
         ('render','生成成片',{'render','render_lively'}),
@@ -26,7 +26,7 @@ def summary(workspace,job,log):
         for directory,dirs,files in os.walk(root,followlinks=False):
             folder=Path(directory);visited+=1
             if visited>500: break
-            dirs[:]=[d for d in dirs if not d.startswith('.') and d not in {'frames','segments','previews','analytics','tracking','profiles','semantic_cache','media_cache','verification','verification_lively','ocr_runtime','event_frames'} and not (folder/d).is_symlink()]
+            dirs[:]=[d for d in dirs if not d.startswith('.') and d not in {'frames','segments','previews','analytics','tracking','profiles','semantic_cache','media_cache','verification','verification_lively','event_frames'} and not (folder/d).is_symlink()]
             try: workspace.path(str(folder),exist=True)
             except (ValueError,OSError): dirs[:]=[];continue
             for name in ('state.json','verification.json','verification_lively.json'):

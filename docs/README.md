@@ -83,7 +83,7 @@ volleymole match --input-dir data/matches --date 2026-09-29 \
   --ranker rules --template sumi --output runs/matches
 ```
 
-`run` 默认五佳，`match` 默认十佳，使用 `--top-k 5` 或 `--top-k 10` 调整。可选 `--focus-player 12`；未指定号码不启动 OCR，号码识别只是筛选证据。
+`run` 默认五佳，`match` 默认十佳，使用 `--top-k 5` 或 `--top-k 10` 调整。
 
 多局文件按 `年.月.日.局号.mp4` 命名，例如 `2026.9.29.1.mp4`、`2026.9.29.2.mp4`。递归扫描、按日期分组、按整数局号排序；重复日期与局号报错，缺失局号不补造。同日不同比赛应放入不同输入目录。
 

@@ -176,7 +176,7 @@ class TemplateTests(unittest.TestCase):
     def test_export_run_omits_credentials_paths_and_preserves_audio(self):
         config = {'video': '/private/match.mp4', 'api_key': 'private-value', 'models': '/private/models',
                   'quality': '2160p', 'style': 'lively', 'design_suite': 'sumi',
-                  'template': self.document, 'focus_player': None}
+                  'template': self.document}
         (self.root / 'run_config.json').write_text(json.dumps(config))
         target = self.root / 'export.json'
         with contextlib.redirect_stdout(io.StringIO()):

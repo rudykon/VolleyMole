@@ -62,7 +62,7 @@ def failure_diagnostics(exc):
 
 def candidate_fields(rally, full_evidence=False):
     fields = {**{k:rally[k] for k in ('rally_id', 'start_sec', 'end_sec', 'safe_start_sec', 'safe_end_sec',
-                                'duration_sec', 'actions', 'players', 'ball_metrics', 'rule_score')},
+                                'duration_sec', 'actions', 'ball_metrics', 'rule_score')},
             'uncertainty':rally.get('uncertainty',{'note':'No extra fusion audit in this historical candidate.'})}
     if 'source_id' in rally:
         fields.update(source_id=rally['source_id'],source_set=rally['source_set'],time_basis='seconds within this set, not whole-match time')

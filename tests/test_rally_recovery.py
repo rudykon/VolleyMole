@@ -17,7 +17,7 @@ class RallyRecoveryTests(unittest.TestCase):
     def build(self, mode=None):
         options = {} if mode is None else {'selection_mode': mode}
         return build_manifest(self.source, self.root/'analytics.jsonl', self.root/'ball.csv',
-                              self.root/'pts.csv', self.root/'player.json', self.root,
+                              self.root/'pts.csv', self.root,
                               self.config, {}, **options)[0]
 
     def half_second_rally(self):
@@ -82,13 +82,13 @@ class RallyRecoveryTests(unittest.TestCase):
             coverage = len(track['positions'])/(last-first+1)
             participating = float(np.median(counts[first:last+1]))/normalizer
             # This synthetic source is entirely aerial during both rallies;
-            # flight is above the historical cap, and there is no target jersey.
+            # flight is above the historical cap.
             self.assertGreater(rally['ball_metrics']['flight_ratio'], .55)
             self.assertEqual(rally['ball_metrics']['low_ball_ratio'], 0)
             features = {'duration': min(rally['duration_sec']/28, 1), 'flight': 1.,
                 'turns': min(rally['ball_metrics']['trajectory_changes']/12, 1),
                 'actions': min(len(rally['action_events'])/5, 1), 'coverage': coverage,
-                'participation': min(participating, 1), 'focus': 0.}
+                'participation': min(participating, 1)}
             expected = {name: round(self.config['weights'][name]*value, 3)
                         for name, value in features.items()}
             quality = min(1., max(.2, participating/.85)**3)

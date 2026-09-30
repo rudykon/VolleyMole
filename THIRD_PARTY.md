@@ -26,12 +26,6 @@ inference_onnx_seq_gray_v2.py   4c2620efea136e87bb3c0d90c1834076edf7fe4906887374
 make_reels.py                  2cb5421f01bb57a16304dd11f6fa5686ab085a80e525b03483153078e81f096a
 ```
 
-`jersey.py` is independently implemented from the requirement (person torso
-crop → digit OCR → timestamped uncertain evidence). No source from
-`volleyball-highlights` is incorporated; no root-level license was found in its
-local checkout. Its private/unknown authorization is not inferred from the
-availability of its source.
-
 The analytical model loaders and batched JSON conversion are package-owned;
 the analytics application's unlicensed local `run_sample.py` and
 `run_batch_video.py` helpers are not imported or copied.
@@ -45,9 +39,6 @@ Runtime wheels are separately resolved and hash-pinned in `uv.lock`. In particul
   Do not claim this combined application is permissive-only or cleared for
   closed-source redistribution. Review the intended distribution/service mode
   and applicable licensing before release.
-- EasyOCR carries [Apache-2.0 terms](https://github.com/JaidedAI/EasyOCR/blob/master/LICENSE).
-  VolleyMole calls the installed library; it does not copy the other project's
-  number-detection implementation.
 - PyTorch, Transformers, ONNX Runtime, OpenCV, PyAV, NumPy, SciPy, Pillow, FontTools and the
   CUDA runtime wheels retain their respective notices in the installed distributions.
   CUDA libraries are not re-exported as VolleyMole assets.
@@ -85,7 +76,7 @@ a different ID. Every member and the full archive are pinned to the local
 validated bytes, so an upstream replacement fails closed.
 
 VballNet is acquired from the pinned tracking repository, person pose weights
-from an Ultralytics release, and OCR weights from EasyOCR releases. No weight is
+from an Ultralytics release. No weight is
 included in Git or a wheel. Availability and hash verification are tested
 separately from licensing conclusions.
 

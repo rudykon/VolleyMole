@@ -14,25 +14,23 @@ class CacheTests(unittest.TestCase):
         # These tests exercise cache identity, not installed inference backends.
         self.package_versions = {name: '1.0.0' for name in (
             'torch', 'torchvision', 'transformers', 'ultralytics', 'onnxruntime-gpu',
-            'numpy', 'av', 'opencv-python-headless', 'easyocr')}
+            'numpy', 'av', 'opencv-python-headless')}
         versions = patch('importlib.metadata.version', side_effect=self.package_versions.__getitem__)
         versions.start()
         self.addCleanup(versions.stop)
 
-    def test_fingerprint_uses_content_models_device_and_ocr_not_output_path(self):
+    def test_fingerprint_uses_content_models_device_not_output_path(self):
         source = {'path':'/first.mp4','sha256':'a'*64,'bytes':123}
         registry = SimpleNamespace(entries={'ball':{'sha256':'b'*64}})
-        def signature(src=source,reg=registry,device='cuda:0',number=None,confidence=.75):
-            return json.dumps(inference_signature(src,reg,device,number,confidence),sort_keys=True)
+        def signature(src=source,reg=registry,device='cuda:0'):
+            return json.dumps(inference_signature(src,reg,device),sort_keys=True)
         baseline = signature()
         self.assertEqual(baseline,signature({**source,'path':'/relocated.mp4'}))
         self.assertEqual(baseline,signature(device='cuda'))
         self.assertNotEqual(baseline,signature({**source,'sha256':'c'*64}))
         self.assertNotEqual(baseline,signature(reg=SimpleNamespace(entries={'ball':{'sha256':'d'*64}})))
         self.assertNotEqual(baseline,signature(device='cpu'))
-        self.assertNotEqual(baseline,signature(number=12))
-        self.assertNotEqual(baseline,signature(confidence=.8))
-        self.assertEqual(inference_signature(source,registry,'cuda:0',None,.75)['environment'],
+        self.assertEqual(inference_signature(source,registry,'cuda:0')['environment'],
                          self.package_versions)
         for package in self.package_versions:
             with self.subTest(package=package), patch.dict(self.package_versions, {package: '2.0.0'}):
@@ -42,9 +40,9 @@ class CacheTests(unittest.TestCase):
         source = {'sha256':'a'*64,'bytes':123}
         registry = SimpleNamespace(entries={})
         with patch('volleymole.detectors.resolve_device', side_effect=AssertionError('no CUDA on cache read')):
-            single = inference_signature(source,registry,'cuda:0',None,.75)
-            four = inference_signature(source,registry,'auto',None,.75,'cuda:0,cuda:1,cuda:2,cuda:3')
-            reordered = inference_signature(source,registry,'auto',None,.75,'cuda:1,cuda:0,cuda:2,cuda:3')
+            single = inference_signature(source,registry,'cuda:0')
+            four = inference_signature(source,registry,'auto','cuda:0,cuda:1,cuda:2,cuda:3')
+            reordered = inference_signature(source,registry,'auto','cuda:1,cuda:0,cuda:2,cuda:3')
         self.assertNotEqual(single, four)
         self.assertNotEqual(four, reordered)
         self.assertIn('gpu_stages.py', four['code'])
@@ -54,7 +52,7 @@ class CacheTests(unittest.TestCase):
         registry=SimpleNamespace(entries={})
         base={'pipeline_depth':1,'auxiliary_device':None,'vball_engine':'ort'}
         def signature(options):
-            return inference_signature(source,registry,'cuda:0',None,.75,performance=options)
+            return inference_signature(source,registry,'cuda:0',performance=options)
         for key,value in [('pipeline_depth',2),('auxiliary_device','cuda:0'),('vball_engine','ort-bound')]:
             self.assertNotEqual(signature(base),signature({**base,key:value}))
 

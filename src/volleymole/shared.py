@@ -1,4 +1,4 @@
-"""Shared decode: each PTS frame feeds state/actions/person/VballNet and optional OCR.
+"""Shared decode: each PTS frame feeds state/actions/person/VballNet.
 
 The auxiliary YOLO ball model only sees frames where VballNet has no detection
 and the action detector has no ball evidence. No interpolation is emitted as a
@@ -13,7 +13,6 @@ from .common import save_json
 from .detectors import Detector
 from .state_model import StateClassifier
 from .tracker import BallTracker
-from .jersey import JerseyReader
 from .video import chunks, decode
 from .gpu_stages import GPUStages, ROLES
 from .performance import Timings
@@ -103,7 +102,7 @@ def infer_batch(packets, state_model, action, person, auxiliary, tracker, worker
 def shared_inference(args, registry, device):
     timings = Timings()
     load_started = perf_counter()
-    for kind in ('analytics','tracking','player'):
+    for kind in ('analytics','tracking'):
         (args.output/kind).mkdir(parents=True, exist_ok=True)
     devices = getattr(args, 'devices', None)
     assigned = dict(zip(ROLES, devices)) if devices else dict.fromkeys(ROLES, device)
@@ -114,8 +113,6 @@ def shared_inference(args, registry, device):
     auxiliary = Detector(registry,'ball',auxiliary_device,half=args.half)
     tracker = BallTracker(registry,assigned['tracking'],args.output/'tracking/profiles',
                           engine=getattr(args, 'vball_engine', 'ort'))
-    reader = JerseyReader(registry,args.number,assigned['person'],args.confidence,
-        runtime_directory=args.output/'player/ocr_runtime') if args.number is not None else None
     windows, count = [], 0
     skipped_visible = skipped_action_ball = 0
     timings.add('model_load', perf_counter()-load_started)
@@ -174,22 +171,17 @@ def shared_inference(args, registry, device):
                 out.write(json.dumps(row,allow_nan=False)+'\n')
                 writer.writerow(ball)
                 pts.write(f'{packet.source_sec:.9f}\n')
-                if reader is not None:
-                    reader.consume(packet,players)
                 count += 1
-            timings.add('result_conversion_write_and_ocr', perf_counter()-write_started)
+            timings.add('result_conversion_write', perf_counter()-write_started)
             if count % 900 == 0:
                 print(f'shared: {count} frames, auxiliary ball on {auxiliary.frames}',flush=True)
     model_names = ['state_weights','state_config','state_processor','action','person','ball','vball']
-    if reader is not None:
-        model_names += ['ocr_recognizer','ocr_detector']
     summary = {'status':'complete' if args.max_frames is None else 'partial_smoke',
         'input':str(args.video),'processed_frames':count,'device':device,'state_windows':windows,
         'counts':{'decode_passes':1,'decoded_frames':count,'state_calls':state_model.calls,
             'vball_calls':tracker.calls,'vball_frames':tracker.frames,'person_frames':person.frames,
             'action_frames':action.frames,'ball_detector_frames':auxiliary.frames,
-            'ball_skipped_vball_visible':skipped_visible,'ball_skipped_action_ball':skipped_action_ball,
-            'ocr_calls':reader.calls if reader else 0,'ocr_extra_person_detections':0},
+            'ball_skipped_vball_visible':skipped_visible,'ball_skipped_action_ball':skipped_action_ball},
         'backend':tracker.backend,'implementation':'shared-pts90-v1'}
     if devices:
         actual = {'state': str(next(state_model.model.parameters()).device),
@@ -210,8 +202,4 @@ def shared_inference(args, registry, device):
     save_json(args.output/'summary.json',summary)
     save_json(args.output/'analytics/summary.json',summary)
     save_json(args.output/'tracking/summary.json',summary)
-    player = reader.result() if reader else {'status':'not_requested','number':None,'detections':[]}
-    if reader and args.max_frames is not None:
-        player['status'] = 'partial_smoke'
-    save_json(args.output/'player/index.json',player)
     return model_names

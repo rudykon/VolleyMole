@@ -11,7 +11,7 @@ import time
 from datetime import datetime, timezone
 from .common import APP, ROOT, Stages, digest, functions_digest, identity, probe, read_json, run, save_json
 from .font_support import DEFAULT_FONT, font_fingerprint
-from .adapters import ingest_analytics, ingest_tracking, ingest_player, ingest_shared, inference_signature
+from .adapters import ingest_analytics, ingest_tracking, ingest_shared, inference_signature
 from .models import ModelRegistry
 from .rally import build_manifest
 from .ranker import rank, shortlist, rule_decision
@@ -113,7 +113,6 @@ def argument_parser():
     action_group.add_argument('--action-evidence',type=Path,help='导入与本视频 SHA256 绑定的本地动作候选 JSON；仅作待核实定位假设')
     action_group.add_argument('--action-evidence-dir',type=Path,help='按源视频 SHA256.json 查找动作候选缓存，支持多局共享')
     parser.add_argument('--event-frame-cache',type=Path,help=argparse.SUPPRESS)
-    parser.add_argument('--focus-player',type=int)
     parser.add_argument('--format',choices=['vertical'],default='vertical')
     parser.add_argument('--output',type=Path)
     parser.add_argument('--config',type=Path)
@@ -151,7 +150,7 @@ def argument_parser():
     from .replay_stage import add_arguments
     add_arguments(parser)
     parser.add_argument('--stop-after',choices=['manifest','rank','replay','render'],default='render')
-    parser.add_argument('--rerun-from',choices=['inference','analytics','tracking','player','rallies','previews','rank','render','verify'])
+    parser.add_argument('--rerun-from',choices=['inference','analytics','tracking','rallies','previews','rank','render','verify'])
     return parser
 
 
@@ -229,7 +228,7 @@ def main(argv=None):
     if args.devices and (args.device!='auto' or args.inference_mode!='shared' or
                          args.evidence_cache or args.analytics_cache or args.tracking_cache):
         parser.error('--devices 仅适用于共享推理，不能与 --device、independent 或显式证据导入同时使用')
-    args.analytics_python=args.tracking_python=args.player_python=sys.executable
+    args.analytics_python=args.tracking_python=sys.executable
     registry=ModelRegistry(args.models)
     os.environ['VOLLEYMOLE_MODELS']=str(registry.directory)
     suffix='_lively' if args.style=='lively' else ''
@@ -245,7 +244,6 @@ def main(argv=None):
             os.environ['VOLLEYMOLE_API_KEY']=llm['api_key']
     video=args.video.resolve()
     if not video.is_file():parser.error(f'找不到素材：{video}')
-    if args.focus_player is not None and not 0<=args.focus_player<=999:parser.error('球衣号码应为 0–999')
     directory=(args.output or ROOT/'runs'/f'{video.stem}-top{args.top_k}').resolve()
     directory.mkdir(parents=True,exist_ok=True)
     lock=(directory/'.lock').open('a')
@@ -277,7 +275,7 @@ def main(argv=None):
               'preparation_and_bookkeeping_sec':round(max(0,total-sum(r['elapsed_sec'] for r in stages.current_run)),3),
               'output':str(output) if output else None,
               'scope_note':'本次命令墙钟耗时，包含输入检查、缓存校验、实际执行阶段及成片校验；不包含开发调试。复用的历史推理/API耗时不计入本次。',
-              'upstream_modes':{name:read_json(directory/name/'provenance.json').get('mode','optional') for name in ('analytics','tracking','player') if (directory/name/'provenance.json').exists()}}
+              'upstream_modes':{name:read_json(directory/name/'provenance.json').get('mode','optional') for name in ('analytics','tracking') if (directory/name/'provenance.json').exists()}}
         if args.analysis_mode=='rallies' and any(r['stage']=='rank' for r in stages.current_run):
             decision=read_json(directory/'edit_decision.json')
             data.update(ranking_mode=decision.get('ranking_mode'),fallback=decision.get('fallback'))
@@ -304,9 +302,9 @@ def main(argv=None):
         print(f'本次命令耗时：{total:.2f} 秒；复用阶段：{", ".join(reused) or "无"}',flush=True)
         lock.close()
     if args.rerun_from:
-        order=['inference','analytics','tracking','player','rallies','previews','rank',render_stage,verify_stage]
+        order=['inference','analytics','tracking','rallies','previews','rank',render_stage,verify_stage]
         target={'render':render_stage,'verify':verify_stage}.get(args.rerun_from,args.rerun_from)
-        if target in ('analytics','tracking','player') and args.inference_mode=='shared':
+        if target in ('analytics','tracking') and args.inference_mode=='shared':
             target='inference'
         for name in order[order.index(target):]:
             stages.data['stages'].pop(name,None)
@@ -315,7 +313,7 @@ def main(argv=None):
     analytics_cache=args.analytics_cache or cached.get('analytics')
     tracking_cache=args.tracking_cache or cached.get('tracking')
     from .replay_stage import config_from as replay_config
-    save_json(directory/'run_config.json',{'video':str(video),'top_k':args.top_k,'focus_player':args.focus_player,
+    save_json(directory/'run_config.json',{'video':str(video),'top_k':args.top_k,
               'style':args.style,'template':args.template_snapshot,
               **replay_config(args),
               'quality':args.quality,'collection':args.collection,'analysis_mode':args.analysis_mode,
@@ -347,15 +345,15 @@ def main(argv=None):
         print('[events] 全场分块粗读与本地推理并行启动', flush=True)
     try:
         if args.inference_mode=='shared' and not analytics_cache and not tracking_cache:
-            signature=inference_signature(meta['identity'],registry,args.device,args.focus_player,config['player_confidence'],args.devices,performance)
-            force=args.no_analysis_cache or args.rerun_from in ('inference','analytics','tracking','player')
+            signature=inference_signature(meta['identity'],registry,args.device,args.devices,performance)
+            force=args.no_analysis_cache or args.rerun_from in ('inference','analytics','tracking')
             if force:stages.data['stages'].pop('inference',None)
             try:
                 result=stages.execute('inference',signature,lambda:ingest_shared(video,directory,registry,signature,args.analysis_cache_dir,force,frame_cache,args.review_fps))
             finally:
                 if frame_cache and read_json(frame_cache/'status.json')['status'] != 'complete':
                     save_json(frame_cache/'status.json', {'status':'unavailable'})
-            analytics,tracking,player=(result[k] for k in ('analytics','tracking','player'))
+            analytics,tracking=(result[k] for k in ('analytics','tracking'))
         else:
             analytics=stages.execute('analytics',{'source':meta['identity'],'cache':cache_sig(analytics_cache,['summary.json','detections.jsonl']),
                                 'worker':code,'models':registry.entries,'adapter':code['adapters.py'],'python':args.analytics_python,'device':args.device},
@@ -363,16 +361,13 @@ def main(argv=None):
             tracking=stages.execute('tracking',{'source':meta['identity'],'cache':cache_sig(tracking_cache,['ball.csv','source_pts.csv','provenance.json']),
                                'adapter':code,'models':registry.entries,'python':args.tracking_python,'device':args.device},
                                lambda:ingest_tracking(video,directory,tracking_cache,args.tracking_python,args.device))
-            player=stages.execute('player',{'source':meta['identity'],'number':args.focus_player,'threshold':config['player_confidence'],
-                             'worker':code,'models':registry.entries,'adapter':code['adapters.py'],'python':args.player_python,'device':args.device},
-                             lambda:ingest_player(video,directory,args.focus_player,args.player_python,args.device,config['player_confidence']))
         def make_manifest():
-            data,files=build_manifest(meta,analytics,tracking,directory/'tracking/source_pts.csv',player,directory,config,
-                                     {k:read_json(directory/k/'provenance.json') for k in ('analytics','tracking','player')},
+            data,files=build_manifest(meta,analytics,tracking,directory/'tracking/source_pts.csv',directory,config,
+                                     {k:read_json(directory/k/'provenance.json') for k in ('analytics','tracking')},
                                      selection_mode=args.analysis_mode)
             return str(directory/'match_manifest.json'),files
         manifest_path=stages.execute('rallies',{'analytics':digest(analytics),'tracking':digest(tracking),'pts':digest(directory/'tracking/source_pts.csv'),
-                                    'player':digest(player),'config':config,'code':code['rally.py'],'selection_mode':args.analysis_mode,
+                                    'config':config,'code':code['rally.py'],'selection_mode':args.analysis_mode,
                                     'evidence_code':code['rally_evidence.py'],'source':meta},make_manifest)
         if args.stop_after=='manifest':finish_timing();return
         manifest=read_json(manifest_path)
@@ -402,12 +397,12 @@ def main(argv=None):
     preview_signature={'source':meta['identity'],'samples':[(r['preview_times_sec'],r['preview_frames']) for r in manifest['rallies'] if r['rally_id'] in preview_ids],
                        'code':functions_digest(APP/'media_worker.py',{'previews','frame_at'})}
     stages.execute('previews',preview_signature,make_previews)
-    decision=stages.execute('rank',{'manifest':digest(manifest_path),'k':args.top_k,'focus':args.focus_player,'ranker':args.ranker,
+    decision=stages.execute('rank',{'manifest':digest(manifest_path),'k':args.top_k,'ranker':args.ranker,
                             'analysis_mode':args.analysis_mode,
                             'model':args.model,'endpoint':args.api_base,'has_key':bool(os.getenv('VOLLEYMOLE_API_KEY') or os.getenv('OPENAI_API_KEY')),
                             'code':code['ranker.py'],'schema':code['schemas.py'],'semantic':code['semantic.py'],'vision_model':args.vision_model,
                             'prompt':digest(APP/'prompts/rank_top_plays.md'),'vision_prompt':digest(APP/'prompts/review_frames.md')},
-                            lambda:rank(manifest,directory,args.top_k,args.focus_player,args.ranker,args.api_base,args.model,args.api_timeout,args.vision_model))
+                            lambda:rank(manifest,directory,args.top_k,args.ranker,args.api_base,args.model,args.api_timeout,args.vision_model))
     if args.stop_after=='rank':finish_timing();return
     from .replay_stage import run_review
     replay_report=run_review(directory,args)

@@ -22,7 +22,7 @@ LABELS = {
     'video':'源视频', 'output':'输出位置', 'input_dir':'多局录像目录', 'date':'比赛日期',
     'top_k':'入选数量', 'collection':'榜单', 'analysis_mode':'分析方式', 'ranker':'排名方式',
     'template':'成片模板', 'design_suite':'视觉套装', 'design_language':'文字语言', 'quality':'输出画质',
-    'focus_player':'关注球员号码', 'device':'计算设备', 'devices':'多卡设备', 'models':'模型目录',
+    'device':'计算设备', 'devices':'多卡设备', 'models':'模型目录',
     'style':'呈现模式', 'art_theme':'插画主题', 'title_template':'标题样式', 'transition_style':'转场样式',
     'replays':'启用慢回放', 'replay_speed':'慢回放速度', 'replay_review':'慢回放复核策略',
     'replay_review_timeout':'复核总时限（秒）', 'replay_review_concurrency':'回放复核并发数',
@@ -49,14 +49,14 @@ LABELS = {
     'pipeline_depth':'流水线深度', 'auxiliary_device':'辅助检测设备', 'vball_engine':'球跟踪引擎',
     'preview_scope':'预览范围', 'preview_workers':'预览并行数', 'render_workers':'渲染并行数',
     'font':'字体文件', 'stop_after':'完成至阶段', 'rerun_from':'从阶段重新执行', 'list':'仅列出比赛',
-    'kind':'推理类型', 'number':'球衣号码', 'confidence':'识别置信度', 'max_frames':'最大帧数（测试用）',
+    'kind':'推理类型', 'max_frames':'最大帧数（测试用）',
     'half':'半精度推理', 'directory':'安装 / 模板目录', 'names':'模型名称（多个用空格分隔）',
     'name':'名称', 'source':'本地模型文件', 'archive':'素材 ZIP', 'file':'模板文件', 'from_run':'从运行配置导出',
 }
 GROUPS = {
-    '基础设置': {'video','input_dir','date','top_k','collection','analysis_mode','ranker','output','template','focus_player','run','kind','manifest','plan','number','list'},
+    '基础设置': {'video','input_dir','date','top_k','collection','analysis_mode','ranker','output','template','run','kind','manifest','plan','list'},
     '视觉与慢回放': {'style','art_theme','title_template','transition_style','design_suite','design_language','quality','format','font'},
-    '计算与缓存': {'device','devices','models','inference_mode','analysis_cache_dir','no_analysis_cache','pipeline_depth','auxiliary_device','vball_engine','preview_scope','preview_workers','render_workers','analytics_cache','tracking_cache','evidence_cache','half','confidence','max_frames'},
+    '计算与缓存': {'device','devices','models','inference_mode','analysis_cache_dir','no_analysis_cache','pipeline_depth','auxiliary_device','vball_engine','preview_scope','preview_workers','render_workers','analytics_cache','tracking_cache','evidence_cache','half','max_frames'},
     '事件与声音': {'analysis_timeout','review_budget_fraction','event_chunk_sec','event_overlap_sec','coarse_fps','review_fps','max_review_sec','semantic_modality','sound_model','sound_labels','sound_thresholds','no_sound_model','sound_device','action_evidence','action_evidence_dir'},
     'API 与请求': {'api_base','model','vision_model','llm_config','api_timeout','semantic_concurrency','semantic_max_tokens','semantic_frame_width','semantic_reasoning_effort','semantic_retries','protocol','max_output_tokens','thinking_level','max_calls'},
 }

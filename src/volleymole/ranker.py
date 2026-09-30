@@ -44,9 +44,9 @@ def rule_decision(candidates, top_k):
     return {'title':f'比赛{top_k}佳球','selected':result}
 
 
-def api_decision(candidates, directory, top_k, focus, endpoint, model, key, timeout, reviews=None, audit=None):
+def api_decision(candidates, directory, top_k, endpoint, model, key, timeout, reviews=None, audit=None):
     prompt=(APP/'prompts/rank_top_plays.md').read_text(encoding='utf-8')
-    content=[{'type':'text','text':f'选择 {top_k} 个回合。目标号码：{focus}。'}]
+    content=[{'type':'text','text':f'选择 {top_k} 个回合。'}]
     for r in candidates:
         fields=candidate_fields(r)
         content.append({'type':'text','text':json.dumps(fields,ensure_ascii=False)})
@@ -71,7 +71,7 @@ def api_decision(candidates, directory, top_k, focus, endpoint, model, key, time
     return result
 
 
-def rank(manifest,directory,top_k,focus,mode,endpoint,model,timeout=90,vision_model=None):
+def rank(manifest,directory,top_k,mode,endpoint,model,timeout=90,vision_model=None):
     candidates=shortlist(manifest,top_k)
     key=os.getenv('VOLLEYMOLE_API_KEY') or os.getenv('OPENAI_API_KEY')
     failure=None
@@ -83,11 +83,11 @@ def rank(manifest,directory,top_k,focus,mode,endpoint,model,timeout=90,vision_mo
                 routing={'reason':'explicit_vision_model','primary_model':model,'vision_model':vision_model}
                 reviews,semantic_files,batches=visual_reviews(candidates,directory,endpoint,vision_model,key,timeout)
                 requests.extend(batches)
-                decision=api_decision(candidates,directory,top_k,focus,endpoint,model,key,timeout,reviews=reviews,audit=requests)
+                decision=api_decision(candidates,directory,top_k,endpoint,model,key,timeout,reviews=reviews,audit=requests)
             else:
                 # The caller controls model choice. A 400 from the primary
                 # model must not trigger a /models request or a model switch.
-                decision=api_decision(candidates,directory,top_k,focus,endpoint,model,key,timeout,audit=requests)
+                decision=api_decision(candidates,directory,top_k,endpoint,model,key,timeout,audit=requests)
             validate_decision(decision,manifest,directory,top_k)
         except (HTTPError,URLError,TimeoutError,HTTPException,ValueError,KeyError,TypeError,IndexError,OSError) as exc:
             decision=None
@@ -117,7 +117,7 @@ def rank(manifest,directory,top_k,focus,mode,endpoint,model,timeout=90,vision_mo
         ranking_mode='vision_then_text_api' if vision_model else 'multimodal_api'
     validate_decision(decision,manifest,directory,top_k)
     decision.update(ranking_mode=ranking_mode,model=model if ranking_mode!='rules_fallback' else None,
-                    vision_model=vision_model if ranking_mode=='vision_then_text_api' else None,focus_player=focus,fallback=failure)
+                    vision_model=vision_model if ranking_mode=='vision_then_text_api' else None,fallback=failure)
     selected={r['rally_id'] for r in decision['selected']}
     decision['rejected']=[{'rally_id':r['rally_id'],'rule_score':r['rule_score'],
                            'reasons':r['exclusion_reasons'] or ['综合排序未进入本次入选名额']} for r in manifest['rallies'] if r['rally_id'] not in selected]

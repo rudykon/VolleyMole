@@ -9,11 +9,11 @@ import sys
 from .common import APP, Stages, digest, identity, read_json, run, save_json
 
 INFERENCE_FILES = ('common.py','video.py','inference.py','shared.py','state_model.py',
-                   'detectors.py','tracker.py','vball_primitives.py','jersey.py','models.py','telemetry.py','gpu_stages.py',
+                   'detectors.py','tracker.py','vball_primitives.py','models.py','telemetry.py','gpu_stages.py',
                    'performance.py','pipeline.py')
 
 
-def inference_signature(source, registry, device, number, confidence, devices=None, performance=None):
+def inference_signature(source, registry, device, devices=None, performance=None):
     import importlib.metadata as metadata
     from .detectors import resolve_device
     from .gpu_stages import parse_devices
@@ -22,10 +22,10 @@ def inference_signature(source, registry, device, number, confidence, devices=No
     devices = parse_devices(devices)
     device = devices[0] if devices else (resolve_device(device) if device=='auto' else ('cuda:0' if device=='cuda' else device))
     packages = ('torch','torchvision','transformers','ultralytics','onnxruntime-gpu',
-                'numpy','av','opencv-python-headless','easyocr')
+                'numpy','av','opencv-python-headless')
     return {'source': {k:source[k] for k in ('sha256','bytes')}, 'models':registry.entries,
             'performance':performance or {'pipeline_depth':1,'auxiliary_device':None,'vball_engine':'ort'},
-            'device':device, 'devices':devices, 'number':number, 'confidence':confidence, 'half':True,
+            'device':device, 'devices':devices, 'half':True,
             'code':{name:digest(APP/name) for name in INFERENCE_FILES},
             'environment':{name:metadata.version(name) for name in packages}}
 
@@ -36,7 +36,7 @@ def ingest_shared(video, directory, registry, signature, cache_root, force=False
     cached = Path(cache_root).resolve()/fingerprint
     cached.mkdir(parents=True,exist_ok=True)
     groups = {'analytics':['detections.jsonl','summary.json'],
-              'tracking':['ball.csv','source_pts.csv','summary.json'], 'player':['index.json']}
+              'tracking':['ball.csv','source_pts.csv','summary.json']}
     with (cached/'.lock').open('a') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX)
         state = Stages(cached)
@@ -51,8 +51,6 @@ def ingest_shared(video, directory, registry, signature, cache_root, force=False
             for name,value in signature.get('performance',{}).items():
                 if value is not None:
                     command += ['--'+name.replace('_','-'),str(value)]
-            if signature['number'] is not None:
-                command += ['--number',signature['number'],'--confidence',signature['confidence']]
             run(command,cached/'inference.log')
             summary = read_json(cached/'summary.json')
             if summary['status'] != 'complete':
@@ -99,7 +97,7 @@ def validate_cache(video, cache, kind):
         if origin.get('parameters',{}).get('max_frames') is not None:
             raise ValueError('Partial smoke inference is not a full-match cache')
         origin = origin.get('original')
-    for name in ('summary.json','index.json'):
+    for name in ('summary.json',):
         if (cache/name).is_file() and read_json(cache/name).get('status')=='partial_smoke':
             raise ValueError('Partial smoke inference is not a full-match cache')
     # A completed pipeline already recorded the raw artifact hashes. Validate
@@ -119,11 +117,11 @@ def validate_cache(video, cache, kind):
     return provenance
 
 
-def ingest(kind, video, directory, cache, python, device, number=None, confidence=.75):
+def ingest(kind, video, directory, cache, python, device):
     out = directory/kind
     out.mkdir(exist_ok=True)
     files = {'analytics':['detections.jsonl','summary.json'],
-             'tracking':['ball.csv','source_pts.csv'], 'player':['index.json']}[kind]
+             'tracking':['ball.csv','source_pts.csv']}[kind]
     if cache is not None:
         original = validate_cache(video, cache, kind)
         inputs = [identity(Path(cache)/name) for name in files]
@@ -135,8 +133,6 @@ def ingest(kind, video, directory, cache, python, device, number=None, confidenc
     else:
         command = [python, '-m', 'volleymole.inference', '--kind',kind, '--video',video,
                    '--output',out, '--device',device, '--half']
-        if number is not None:
-            command += ['--number', number, '--confidence',confidence]
         run(command, out/'inference.log')
     artifacts = [out/name for name in files] + [out/'provenance.json']
     if cache is None and (out/'telemetry.json').is_file():
@@ -150,13 +146,3 @@ def ingest_analytics(video, directory, cache, python, device):
 
 def ingest_tracking(video, directory, cache, python, device):
     return ingest('tracking', video, directory, cache, python, device)
-
-
-def ingest_player(video, directory, number, python, device, confidence):
-    if number is None:
-        out = directory/'player'
-        out.mkdir(exist_ok=True)
-        save_json(out/'index.json', {'status':'not_requested','number':None,'detections':[]})
-        save_json(out/'provenance.json', {'project':'VolleyMole','mode':'not_requested','models':{}})
-        return str(out/'index.json'), [out/'index.json',out/'provenance.json']
-    return ingest('player', video, directory, None, python, device, number, confidence)

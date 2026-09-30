@@ -9,7 +9,7 @@ import time
 from volleymole.common import digest, read_json, save_json
 
 
-RAW = ('analytics/detections.jsonl','tracking/ball.csv','tracking/source_pts.csv','player/index.json')
+RAW = ('analytics/detections.jsonl','tracking/ball.csv','tracking/source_pts.csv')
 
 
 def compare(reference, candidate):

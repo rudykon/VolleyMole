@@ -14,7 +14,7 @@ def main():
     args=parser.parse_args()
     a,b=args.reference,args.candidate
     checks={name:digest(a/name)==digest(b/name) for name in
-            ('analytics/detections.jsonl','tracking/ball.csv','tracking/source_pts.csv','player/index.json')}
+            ('analytics/detections.jsonl','tracking/ball.csv','tracking/source_pts.csv')}
     sa,sb=(read_json(p/'analytics/summary.json') for p in (a,b))
     checks['frame_counts_and_calls']=sa['counts']==sb['counts']
     checks['state_windows']=sa['state_windows']==sb['state_windows']

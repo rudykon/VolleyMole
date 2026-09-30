@@ -127,7 +127,7 @@ class Workspace:
         rows=[]
         for base in ('runs','outputs'):
             for root,dirs,files in os.walk(self.root/base,followlinks=False):
-                dirs[:]=[d for d in dirs if not d.startswith('.') and d not in {'analytics','tracking','previews','profiles','frames','segments','semantic_cache','media_cache','verification','verification_lively','ocr_runtime'}]
+                dirs[:]=[d for d in dirs if not d.startswith('.') and d not in {'analytics','tracking','previews','profiles','frames','segments','semantic_cache','media_cache','verification','verification_lively'}]
                 if not {'run_config.json','state.json','edit_decision.json','render_report_lively.json','render_report.json','matches_report.json'}.intersection(files): continue
                 p=Path(root)
                 try: self.path(str(p))
@@ -163,7 +163,7 @@ class Workspace:
                 except (ValueError,OSError): reports[name]={'note':'文件暂不可读或过大，请在文件列表中下载'}
         artifacts=[]
         for root,dirs,files in os.walk(p,followlinks=False):
-            dirs[:]=[d for d in dirs if not d.startswith('.') and d not in {'analytics','tracking','profiles','frames','semantic_cache','ocr_runtime'}]
+            dirs[:]=[d for d in dirs if not d.startswith('.') and d not in {'analytics','tracking','profiles','frames','semantic_cache'}]
             for name in files:
                 f=Path(root)/name
                 if f.suffix.lower() not in MEDIA|{'.json','.csv'}: continue

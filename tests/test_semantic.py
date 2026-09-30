@@ -1,11 +1,6 @@
 import copy
 import io
 import json
-from pathlib import Path
-import re
-import shutil
-import subprocess
-import sys
 import unittest
 from unittest.mock import patch
 from urllib.error import HTTPError
@@ -13,7 +8,6 @@ from urllib.error import HTTPError
 from volleymole.ranker import rank, api_decision
 from volleymole.common import read_json
 from volleymole.semantic import validate_reviews, visual_reviews, request_json, ResponseContractError
-from volleymole.jersey import PLAYER_SAMPLE_FILTER
 import test_pipeline
 
 
@@ -26,7 +20,7 @@ class VisionRoutingTests(unittest.TestCase):
 
     def test_final_generation_has_a_finite_output_token_budget(self):
         with patch('volleymole.ranker.request_json',return_value=(self.decision,{'model':'test'})) as request:
-            result=api_decision(self.rallies,self.root,5,None,'https://example.invalid/v1','test','test-token',1,
+            result=api_decision(self.rallies,self.root,5,'https://example.invalid/v1','test','test-token',1,
                                 reviews=self.review_rows())
         self.assertEqual(result,self.decision)
         self.assertEqual(request.call_args.args[2]['max_tokens'],8192)
@@ -46,7 +40,7 @@ class VisionRoutingTests(unittest.TestCase):
              patch('volleymole.ranker.api_decision',side_effect=error) as generation, \
              patch('volleymole.semantic.choose_vision_model') as choose, \
              patch('volleymole.ranker.visual_reviews') as reviews:
-            path,_=rank(self.manifest,self.root,5,None,'auto','https://example.invalid/v1','text-model')
+            path,_=rank(self.manifest,self.root,5,'auto','https://example.invalid/v1','text-model')
         result=read_json(path)
         self.assertEqual(result['ranking_mode'],'rules_fallback')
         self.assertEqual(result['fallback']['http_status'],400)
@@ -58,7 +52,7 @@ class VisionRoutingTests(unittest.TestCase):
         error=HTTPError('https://example.invalid',400,'Bad request',{},io.BytesIO(b'{"message":"context too long"}'))
         with patch.dict('os.environ',{'VOLLEYMOLE_API_KEY':'test-token'}), \
              patch('volleymole.ranker.api_decision',side_effect=error),patch('volleymole.semantic.choose_vision_model') as choose:
-            path,_=rank(self.manifest,self.root,5,None,'auto','https://example.invalid/v1','test-model')
+            path,_=rank(self.manifest,self.root,5,'auto','https://example.invalid/v1','test-model')
         choose.assert_not_called()
         self.assertEqual(read_json(path)['ranking_mode'],'rules_fallback')
 
@@ -83,24 +77,6 @@ class VisionRoutingTests(unittest.TestCase):
             (self.root/candidates[0]['preview_frames'][0]).write_bytes(b'changed-source-frame')
             visual_reviews(candidates,self.root,'https://example.invalid/v1','vision','test-token',1,batch_size=5)
             self.assertEqual(request.call_count,2)
-
-
-class PlayerTimestampTests(unittest.TestCase):
-    @unittest.skipUnless(shutil.which('ffmpeg'),'FFmpeg required')
-    def test_recorded_integer_second_matches_actual_source_frame(self):
-        result=subprocess.run(['ffmpeg','-hide_banner','-f','lavfi','-i','testsrc2=size=320x180:rate=30',
-            '-t','2','-vf','showinfo@before,'+PLAYER_SAMPLE_FILTER+',showinfo@after','-f','null','-'],
-            capture_output=True,text=True,check=True)
-        source={};sampled=[]
-        for line in result.stderr.splitlines():
-            match=re.search(r'pts_time:([\d.]+).*?checksum:([0-9A-F]+)',line)
-            if not match:continue
-            when,checksum=match.groups()
-            if 'showinfo@before' in line:source[checksum]=float(when)
-            if 'showinfo@after' in line:sampled.append((float(when),checksum))
-        self.assertGreaterEqual(len(sampled),2)
-        for when,checksum in sampled[:2]:
-            self.assertLessEqual(abs(when-source[checksum]),1/30)
 
 
 if __name__=='__main__':unittest.main()

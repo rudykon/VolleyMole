@@ -7,7 +7,7 @@ from .media import AUDIO, VIDEO
 
 INTERNAL = {'analytics', 'tracking', 'previews', 'profiles', 'frames', 'segments',
             'clips', 'clips_lively', 'semantic_cache', 'media_cache', 'verification',
-            'verification_lively', 'ocr_runtime', 'visual-assets', 'web-config',
+            'verification_lively', 'visual-assets', 'web-config',
             'public_benchmarks', '__pycache__'}
 
 

@@ -25,14 +25,14 @@ def compare_smoke(baseline, candidate):
     from compare_integration_runs import compare_rows
     raw = compare_rows(baseline,candidate)
     hashes = {name: digest(baseline/name) == digest(candidate/name) for name in (
-        'analytics/detections.jsonl','tracking/ball.csv','tracking/source_pts.csv','player/index.json')}
+        'analytics/detections.jsonl','tracking/ball.csv','tracking/source_pts.csv')}
     a,b = (read_json(run/'provenance.json') for run in (baseline,candidate))
     sa,sb = (read_json(run/'summary.json') for run in (baseline,candidate))
     checks = {'same_source': all(a['source'][k] == b['source'][k] for k in ('sha256','bytes')),
               'same_frame_limit': a['parameters']['max_frames'] == b['parameters']['max_frames'],
               'same_frame_count': raw['frames'] == sa['processed_frames'] == sb['processed_frames'],
               'same_inference_counts': sa['counts'] == sb['counts'],
-              'byte_identical_evidence_and_ocr': all(hashes.values())}
+              'byte_identical_evidence': all(hashes.values())}
     return {'status':'passed' if all(checks.values()) else 'differences_require_review',
             'checks':checks,'identical_files':hashes,'evidence':raw,
             'scope':'Short source or explicitly partial smoke, not a full-match benchmark.'}
@@ -100,7 +100,7 @@ def compare(baseline, candidate, manifest_baseline):
                 'observed_time_reduction_percent': round(100*(1-four_sec/single_sec),2)},
             'inference_body_wall_sec': {'single': old['historical_inference_telemetry']['wall_sec'],
                                         'four':telemetry['wall_sec']},
-            'timing_scope': 'Fresh source analysis through rally manifest, including model loading; no LLM calls, previews, rendering or OCR. Historical single-card trial versus current four-card trial, not an isolated or repeated benchmark.',
+            'timing_scope': 'Fresh source analysis through rally manifest, including model loading; no LLM calls, previews or rendering. Historical single-card trial versus current four-card trial, not an isolated or repeated benchmark.',
             'raw_hashes':hashes,'evidence':raw,'boundaries':compare_boundaries(manifest_baseline,candidate),
             'gpu_execution':execution,'gpu_whole_device_samples':device_stats,
             'torch_devices':telemetry['torch_devices'],'inference_pid':telemetry['pid'],

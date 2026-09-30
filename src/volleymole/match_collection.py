@@ -73,7 +73,7 @@ def merge_manifests(parts,directory,match_date):
 
 def part_options(args):
     options=[]
-    names=('models','config','focus_player','inference_mode','analysis_cache_dir','device','llm_config',
+    names=('models','config','inference_mode','analysis_cache_dir','device','llm_config',
            'pipeline_depth','auxiliary_device','vball_engine','preview_workers')
     for name in names:
         value=getattr(args,name)
@@ -189,9 +189,9 @@ def execute_match(args,day,sets):
         if llm.get('provider') not in (None,'openai_compatible'):raise ValueError('只支持 openai_compatible 接口')
         if llm.get('api_key'):os.environ['VOLLEYMOLE_API_KEY']=llm['api_key']
         endpoint=llm.get('base_url',args.api_base);model=args.model or llm.get('model');vision=args.vision_model or llm.get('vision_model')
-        stages.execute('rank',{**signature,'focus':args.focus_player,'endpoint':endpoint,'model':model,'vision':vision,
+        stages.execute('rank',{**signature,'endpoint':endpoint,'model':model,'vision':vision,
             'has_key':bool(os.getenv('VOLLEYMOLE_API_KEY') or os.getenv('OPENAI_API_KEY'))},
-            lambda:rank(manifest,directory,args.top_k,args.focus_player,args.ranker,endpoint,model,args.api_timeout,vision))
+            lambda:rank(manifest,directory,args.top_k,args.ranker,endpoint,model,args.api_timeout,vision))
         decision=read_json(directory/'edit_decision.json')
         selected=[]
         for item in decision['selected']:

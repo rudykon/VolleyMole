@@ -19,10 +19,5 @@
     },
     "local_changes": "Includes pre-integration tail alignment and camera fixes; removes external decoding/path injection/UI; adds PTS packet input, confidence and backend proof."
   },
-  "jersey": {
-    "implementation": "Independently implemented in VolleyMole; no volleyball-highlights source incorporated.",
-    "library": "EasyOCR (Apache-2.0), installed separately",
-    "weights": "Not bundled; see model_manifest.json"
-  },
   "distribution_note": "MIT notices apply only to incorporated source. Ultralytics is an AGPL dependency; model weights and the user logo are not relicensed. See repository THIRD_PARTY.md before distribution."
 }

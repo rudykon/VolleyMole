@@ -4,7 +4,7 @@ import json
 from collections import Counter
 from pathlib import Path
 import numpy as np
-from .common import read_json, save_json
+from .common import save_json
 from .rally_evidence import associate_auxiliary, low_motion, uncertain_gaps, preserve_separations
 
 
@@ -18,7 +18,7 @@ def grouped(indices, times, gap):
     return groups
 
 
-def build_manifest(source, analytics_path, ball_path, pts_path, player_path, directory, config, provenance, *, selection_mode='events'):
+def build_manifest(source, analytics_path, ball_path, pts_path, directory, config, provenance, *, selection_mode='events'):
     if selection_mode not in ('rallies', 'events'):
         raise ValueError('未知候选选择模式')
     directory = Path(directory)
@@ -101,7 +101,6 @@ def build_manifest(source, analytics_path, ball_path, pts_path, player_path, dir
     state_extra = np.array([b['play_ratio'] >= .5 for b in bins]) & ~covered
     groups += grouped(np.flatnonzero(state_extra), edges, step+1e-5)
     groups.sort(key=lambda g: g[0])
-    player = read_json(player_path)
     rallies, artifacts = [], []
     counts = np.array(counts)
     max_count = max(1, float(np.percentile(counts, 85)))
@@ -130,12 +129,9 @@ def build_manifest(source, analytics_path, ball_path, pts_path, player_path, dir
             if v1*v2 < 0 and min(abs(v1),abs(v2)) > .004*h and t[i]-last_turn > .35:
                 turns.append(float(t[i])); last_turn = t[i]
         participating = float(np.median(counts[s:e])) / max_count
-        player_samples = [d for d in player.get('detections', []) if a <= d['time_sec'] < b and d['confidence'] >= config['player_confidence']]
-        hit_times = {round(d['time_sec'], 3) for d in player_samples}
-        focus_ratio = min(1., len(hit_times) * player.get('sample_interval_sec', 1.)/(b-a)) if len(hit_times) >= 2 else 0.
         features = {'duration': 0., 'flight': min((flight+.75*float(low[s:e].mean()))/.55, 1),
                     'turns': 0., 'actions': float(bool(events)),
-                    'coverage': coverage, 'participation': min(participating, 1), 'focus': focus_ratio}
+                    'coverage': coverage, 'participation': min(participating, 1)}
         if selection_mode=='rallies':
             # Restore the complete-rally fallback from 4399475. Event discovery
             # keeps its independent evidence-backed scoring and loose proposals.
@@ -168,7 +164,6 @@ def build_manifest(source, analytics_path, ball_path, pts_path, player_path, dir
         peak = max(events, key=lambda d: {'spike':4,'block':3,'receive':2,'set':1}[d['action']])['start_sec'] if events else (a+b)/2
         rallies.append({'rally_id': rid, 'start_sec': a, 'end_sec': b, 'duration_sec': round(b-a,3),
                         'tracking_json': track_name, 'actions': sorted({d['action'] for d in events}), 'action_events': events,
-                        'players': [{'number': player['number'], 'presence_ratio': round(focus_ratio,3), 'confirmed_samples': len(hit_times)}] if player.get('number') is not None else [],
                         'ball_metrics': {'visible_ratio': round(coverage,4), 'flight_ratio': round(flight,4), 'trajectory_changes': len(turns),
                             'supported_motion_ratio':round(supported,4),'low_ball_ratio':round(float(low[s:e].mean()),4)},
                         'state_metrics': dict(Counter(r['state'] for r in records[s:e])),

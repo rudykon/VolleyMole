@@ -2,12 +2,11 @@
 import csv
 import json
 from pathlib import Path
-import sys
 import tempfile
 import unittest
 import numpy as np
 
-from volleymole.common import APP, read_json, save_json
+from volleymole.common import APP, read_json
 from volleymole.rally import build_manifest
 
 
@@ -27,7 +26,6 @@ class RallyTests(unittest.TestCase):
                 'players':[{'xyxy':[200,300,250,550],'confidence':.9}]*6})
             self.balls.append([i,1,x,y,0])
         self.write_inputs()
-        save_json(self.root/'player.json',{'number':None,'detections':[]})
 
     def tearDown(self):self.tmp.cleanup()
 
@@ -40,7 +38,7 @@ class RallyTests(unittest.TestCase):
 
     def build(self):
         return build_manifest(self.source,self.root/'analytics.jsonl',self.root/'ball.csv',self.root/'pts.csv',
-                              self.root/'player.json',self.root,self.config,{})[0]
+                              self.root,self.config,{})[0]
 
     def test_bridges_short_state_error_but_splits_retrieval(self):
         m=self.build();valid=[r for r in m['rallies'] if r['eligible']]
@@ -80,16 +78,5 @@ class RallyTests(unittest.TestCase):
         self.assertTrue(all(r['uncertainty']['low_ball_dominant'] for r in valid))
         self.config['rally_algorithm']='legacy_v1'
         self.assertFalse(any(r['eligible'] for r in self.build()['rallies']))
-
-    def test_player_requires_repeated_confident_evidence(self):
-        baseline=self.build()['rallies'][0]['rule_score']
-        save_json(self.root/'player.json',{'number':12,'sample_interval_sec':1.,'detections':[
-            {'time_sec':3.,'confidence':.95},{'time_sec':4.,'confidence':.98},{'time_sec':5.,'confidence':.2}]})
-        r=self.build()['rallies'][0]
-        self.assertGreater(r['rule_score'],baseline)
-        self.assertEqual(r['players'][0]['confirmed_samples'],2)
-        save_json(self.root/'player.json',{'number':12,'detections':[{'time_sec':3.,'confidence':.99}]})
-        self.assertEqual(self.build()['rallies'][0]['rule_score'],baseline)
-
 
 if __name__=='__main__':unittest.main()

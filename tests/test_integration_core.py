@@ -14,7 +14,6 @@ from volleymole.common import APP, save_json
 from volleymole.models import ModelRegistry
 from volleymole.video import FramePacket, chunks
 from volleymole.state_model import uniform_indices
-from volleymole.jersey import JerseyReader, digit_candidate, torso_box
 from volleymole.tracker import BallTracker, seq9_shape
 
 
@@ -106,32 +105,6 @@ class PacketTests(unittest.TestCase):
         self.assertEqual([r['Frame'] for r in rows],[9,10])
         np.testing.assert_allclose(tracker.session.last[0,:,0,0],np.arange(2,11)/255,atol=1e-7)
         self.assertEqual(tracker.frames,11)
-
-
-class JerseyTests(unittest.TestCase):
-    def test_numeric_evidence_validation(self):
-        self.assertEqual(digit_candidate(' 12 ',.9),12)
-        for text,score in [('I2',.9),('1234',.9),('１２',.9),('12',float('nan')),('12',1.1)]:
-            self.assertIsNone(digit_candidate(text,score))
-        self.assertEqual(torso_box([-10,-10,110,210],100,200),[4,34,96,136])
-
-    def test_samples_record_actual_pts_and_raw_evidence(self):
-        class OCR:
-            def readtext(self,*args,**kwargs):
-                return [([[0,0],[10,0],[10,10],[0,10]],'12',.95),
-                        ([[0,0],[10,0],[10,10],[0,10]],'7',.4)]
-        reader = JerseyReader.__new__(JerseyReader)
-        reader.reader, reader.number, reader.confidence, reader.interval = OCR(),12,.75,1.
-        reader.next_sample, reader.calls = 0.,0
-        reader.samples,reader.observations,reader.detections = [],[],[]
-        people = [{'xyxy':[0,0,100,200], 'confidence':.9}]
-        for i,pts in enumerate([14,990,1014,2010]):
-            reader.consume(FramePacket(i,pts,Fraction(1,1000),0,np.zeros((200,100,3),np.uint8)),people)
-        result = reader.result()
-        self.assertEqual([s['time_sec'] for s in result['samples']],[.014,1.014,2.01])
-        self.assertEqual(len(result['detections']),3)
-        self.assertEqual(len(result['observations']),6)
-        self.assertTrue(all(d['number']==12 for d in result['detections']))
 
 
 class PackagingTests(unittest.TestCase):

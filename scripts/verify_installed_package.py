@@ -15,11 +15,9 @@ def main():
     args = parser.parse_args()
     if 'site-packages' not in APP.parts:
         raise RuntimeError(f'Not testing an installed wheel: {APP}')
-    for kind in ('analytics','tracking','player','shared'):
+    for kind in ('analytics','tracking','shared'):
         command = ['--kind',kind,'--video',str(args.video),'--models',str(args.models),
                    '--output',str(args.output/kind),'--device',args.device,'--max-frames','30','--half']
-        if kind in ('player','shared'):
-            command += ['--number','12']
         infer(command)
     imported = {name:str(module.__file__) for name,module in sys.modules.items()
                 if name.startswith('volleymole') and getattr(module,'__file__',None)}
@@ -30,7 +28,7 @@ def main():
         raise RuntimeError('Upstream application module was imported')
     save_json(args.output/'installed-package-proof.json', {'status':'passed','python':sys.executable,
         'isolated_interpreter':bool(sys.flags.isolated),'cwd':str(Path.cwd()),'modules':imported,
-        'scope':'Real 30-frame neural inference per independent module and shared stream with OCR; not full-match accuracy.'})
+        'scope':'Real 30-frame neural inference per independent module and shared stream; not full-match accuracy.'})
     print('Installed neural package isolation passed')
 
 

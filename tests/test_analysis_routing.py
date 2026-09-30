@@ -35,7 +35,7 @@ def fixture_manifest(directory, video, count=10, score_offset=0, selection_mode=
             'safe_end_sec': index*20.+12, 'duration_sec': 8., 'eligible': True,
             'rule_score': 100+score_offset-index, 'tracking_json': tracking,
             'preview_frames': previews, 'preview_times_sec': [index*20.+2, index*20.+6, index*20.+10],
-            'actions': [], 'players': [], 'ball_metrics': {'visible_ratio': .8, 'trajectory_changes': 5},
+            'actions': [], 'ball_metrics': {'visible_ratio': .8, 'trajectory_changes': 5},
             'exclusion_reasons': []})
     manifest = {'source': source(video), 'config': read_json(APP/'defaults.json'), 'rallies': rallies}
     if selection_mode is not None:
@@ -140,7 +140,7 @@ class AnalysisRoutingTests(unittest.TestCase):
         output = self.root/'single'
         def ingest(video, directory, registry, signature, cache, force, frame_cache, fps):
             paths = {'analytics': directory/'analytics/detections.jsonl',
-                     'tracking': directory/'tracking/ball.csv', 'player': directory/'player/index.json'}
+                     'tracking': directory/'tracking/ball.csv'}
             artifacts = []
             for name, path in paths.items():
                 save_json(directory/name/'provenance.json', {'mode': 'fixture'})
@@ -149,7 +149,7 @@ class AnalysisRoutingTests(unittest.TestCase):
             if frame_cache: save_json(frame_cache/'status.json', {'status': 'complete'})
             return {k: str(v) for k, v in paths.items()}, artifacts
         def build(*params, **kwargs):
-            directory = params[5]
+            directory = params[4]
             self.assertIn(kwargs['selection_mode'], ('rallies', 'events'))
             self.build_modes.append(kwargs['selection_mode'])
             manifest = fixture_manifest(directory, video, selection_mode=kwargs['selection_mode'])

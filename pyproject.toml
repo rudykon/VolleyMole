@@ -14,7 +14,7 @@ dependencies = [
   "numpy==2.3.5", "opencv-python-headless==4.13.0.92",
   "pillow==12.3.0", "fonttools==4.64.0", "scipy==1.17.1", "av==18.1.0",
   "torch==2.11.0", "torchvision==0.26.0", "transformers==4.57.6",
-  "ultralytics==8.4.143", "onnxruntime-gpu==1.24.1", "easyocr==1.7.2",
+  "ultralytics==8.4.143", "onnxruntime-gpu==1.24.1",
 ]
 
 [project.scripts]
@@ -40,8 +40,8 @@ volleymole = ["assets/**/*.png", "assets/**/*.ttf", "assets/**/*.otf", "assets/*
 
 [tool.uv]
 environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
-# Ultralytics requests the GUI wheel; EasyOCR requests headless. Both provide
-# cv2 and must not be installed together. The pinned headless build is sufficient.
+# Ultralytics requests the GUI wheel. Use the pinned headless build for cv2
+# and exclude the GUI wheel to avoid two packages providing the same module.
 exclude-dependencies = ["opencv-python"]
 
 [tool.uv.sources]

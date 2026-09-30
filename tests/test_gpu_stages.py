@@ -11,7 +11,6 @@ from volleymole.gpu_stages import GPUStages, ROLES, parse_devices
 from volleymole.shared import infer_batch
 from volleymole.video import FramePacket
 from volleymole.telemetry import UsageMonitor
-from volleymole.jersey import pin_ocr_device
 
 
 DEVICES = ['cuda:0', 'cuda:1', 'cuda:2', 'cuda:3']
@@ -118,17 +117,3 @@ class FourGPUStageTests(unittest.TestCase):
         with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
             infer_main(['--video','missing.mp4','--output','missing','--kind','analytics',*devices])
         self.assertEqual(cm.exception.code,2)
-
-    def test_optional_ocr_does_not_reintroduce_all_device_data_parallel(self):
-        class Wrapper:
-            def __init__(self):
-                self.module = MagicMock()
-                self.module.to.return_value = self.module
-        detector, recognizer = Wrapper(), Wrapper()
-        reader = SimpleNamespace(detector=detector, recognizer=recognizer)
-        with patch.dict('sys.modules', {'torch':SimpleNamespace(nn=SimpleNamespace(DataParallel=Wrapper))}):
-            pin_ocr_device(reader, 'cuda:2')
-        self.assertIs(reader.detector, detector.module)
-        self.assertIs(reader.recognizer, recognizer.module)
-        detector.module.to.assert_called_once_with('cuda:2')
-        recognizer.module.to.assert_called_once_with('cuda:2')

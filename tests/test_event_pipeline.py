@@ -97,16 +97,16 @@ class PipelineTests(unittest.TestCase):
                 from volleymole.run_match import main
                 def ingest(video,directory,*unused):
                     artifacts=[]
-                    for name in ('analytics','tracking','player'):
+                    for name in ('analytics','tracking'):
                         save_json(directory/name/'provenance.json',{'mode':'fixture'})
                         artifacts.append(directory/name/'provenance.json')
                     paths={'analytics':directory/'analytics/detections.jsonl',
-                           'tracking':directory/'tracking/ball.csv','player':directory/'player/index.json'}
+                           'tracking':directory/'tracking/ball.csv'}
                     for path in paths.values():path.write_text('');artifacts.append(path)
                     pts=directory/'tracking/source_pts.csv';pts.write_text('0\n');artifacts.append(pts)
                     return {k:str(v) for k,v in paths.items()},artifacts
                 def build(*params, **kwargs):
-                    directory=params[5]
+                    directory=params[4]
                     save_json(directory/'match_manifest.json',manifest)
                     return manifest,[directory/'match_manifest.json']
                 with patch('volleymole.run_match.ModelRegistry',return_value=SimpleNamespace(directory=root,entries={})), \

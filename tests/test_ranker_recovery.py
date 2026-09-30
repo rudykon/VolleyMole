@@ -19,7 +19,7 @@ class RankerRecoveryTests(unittest.TestCase):
 
     def run_rank(self, vision_model=None):
         with patch.dict('os.environ', {'VOLLEYMOLE_API_KEY': self.secret}):
-            path, _ = rank(self.manifest, self.root, 5, None, 'auto',
+            path, _ = rank(self.manifest, self.root, 5, 'auto',
                            'https://example.invalid/v1', 'glm-5.3-flash', 1,
                            vision_model=vision_model)
         return read_json(path), read_json(self.root/'ranking_log.json')
@@ -111,7 +111,7 @@ class RankerRecoveryTests(unittest.TestCase):
         self.assertEqual(result['model'], 'glm-5.3-flash')
         self.assertEqual(result['vision_model'], 'glm-5.3-flash')
         self.assertEqual(reviews.call_args.args[3], 'glm-5.3-flash')
-        self.assertEqual(generation.call_args.args[5], 'glm-5.3-flash')
+        self.assertEqual(generation.call_args.args[4], 'glm-5.3-flash')
         self.assertEqual(generation.call_args.kwargs['reviews'], observations)
         self.assertEqual(log['routing']['reason'], 'explicit_vision_model')
         choose.assert_not_called()

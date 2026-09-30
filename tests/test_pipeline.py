@@ -23,7 +23,7 @@ class DecisionTests(unittest.TestCase):
             self.rallies.append({'rally_id':f'r{i}','start_sec':i*20+2.,'end_sec':i*20+10.,
                 'safe_start_sec':i*20.,'safe_end_sec':i*20+12.,'eligible':True,'rule_score':90-i,
                 'tracking_json':track,'preview_frames':previews,'duration_sec':8,'actions':['set'],
-                'players':[],'ball_metrics':{'visible_ratio':.8,'trajectory_changes':5},'exclusion_reasons':[]})
+                'ball_metrics':{'visible_ratio':.8,'trajectory_changes':5},'exclusion_reasons':[]})
         self.manifest={'source':{'duration_sec':220},'rallies':self.rallies,'config':{'preview_limit':25}}
         self.decision=rule_decision(self.rallies,5)
 
@@ -48,7 +48,7 @@ class DecisionTests(unittest.TestCase):
 
     def test_model_failure_falls_back_and_reports_every_rejection(self):
         with patch.dict('os.environ',{'VOLLEYMOLE_API_KEY':'test-token'}),patch('volleymole.ranker.api_decision',side_effect=URLError('offline')):
-            path,_=rank(self.manifest,self.root,5,None,'auto','https://example.invalid/v1','test-model',.1)
+            path,_=rank(self.manifest,self.root,5,'auto','https://example.invalid/v1','test-model',.1)
         decision=read_json(path)
         self.assertEqual(decision['ranking_mode'],'rules_fallback')
         self.assertEqual(len(decision['selected']),5)
@@ -58,17 +58,17 @@ class DecisionTests(unittest.TestCase):
     def test_invalid_successful_model_response_also_falls_back(self):
         invalid=copy.deepcopy(self.decision);invalid['selected'][0]['clip_end_sec']=999
         with patch.dict('os.environ',{'VOLLEYMOLE_API_KEY':'test-token'}),patch('volleymole.ranker.api_decision',return_value=invalid):
-            path,_=rank(self.manifest,self.root,5,None,'auto','https://example.invalid/v1','test-model')
+            path,_=rank(self.manifest,self.root,5,'auto','https://example.invalid/v1','test-model')
         self.assertEqual(read_json(path)['ranking_mode'],'rules_fallback')
 
     def test_valid_model_response_used(self):
         with patch.dict('os.environ',{'VOLLEYMOLE_API_KEY':'test-token'}),patch('volleymole.ranker.api_decision',return_value=self.decision):
-            path,_=rank(self.manifest,self.root,5,None,'auto','https://example.invalid/v1','test-model')
+            path,_=rank(self.manifest,self.root,5,'auto','https://example.invalid/v1','test-model')
         self.assertEqual(read_json(path)['ranking_mode'],'multimodal_api')
 
     def test_refuse_fewer_rallies_than_requested(self):
         self.manifest['rallies']=self.rallies[:4]
-        with self.assertRaises(ValueError):rank(self.manifest,self.root,5,None,'rules','',None)
+        with self.assertRaises(ValueError):rank(self.manifest,self.root,5,'rules','',None)
 
 
 class ResumeTests(unittest.TestCase):

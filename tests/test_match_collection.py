@@ -49,7 +49,7 @@ class MultiSourceTests(unittest.TestCase):
                 rallies.append({'rally_id':f'r{i}','start_sec':i*20+2.,'end_sec':i*20+8.,
                     'safe_start_sec':i*20.,'safe_end_sec':i*20+10.,'duration_sec':6.,'eligible':True,
                     'rule_score':number*100-i,'tracking_json':track,'preview_frames':images,
-                    'preview_times_sec':[i*20+2,i*20+4,i*20+7], 'actions':['set'],'players':[],
+                    'preview_times_sec':[i*20+2,i*20+4,i*20+7], 'actions':['set'],
                     'ball_metrics':{'visible_ratio':.8,'trajectory_changes':5},'exclusion_reasons':[]})
             save_json(part/'match_manifest.json',{'source':{'path':str(part/'source.mp4'),'duration_sec':120.,
                 'has_audio':number==1,'width':1920,'height':1080},'config':{'preview_limit':25},'rallies':rallies})
