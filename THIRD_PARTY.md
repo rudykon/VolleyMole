@@ -103,7 +103,7 @@ temporal GRU adapter is independently implemented and trained using original
 VNL-STES train/validation annotations. Neither this backbone nor the resulting
 local checkpoint is included in Git or wheels. No STES author's trained
 volleyball checkpoint is claimed or redistributed. Model and data provenance
-are documented in [the local action experiment](docs/本地排球动作定位.md);
+are documented in [the local action experiment](docs/开发与验证.md#action-model);
 the project's source license does not relicense ImageNet or match footage.
 
 Public benchmark audio, video frames and annotations remain in ignored
@@ -111,7 +111,7 @@ Public benchmark audio, video frames and annotations remain in ignored
 ESC-50, FSD50K, VNL-STES and SVHighlights have separate dataset or clip terms;
 neither downloading original labels nor reconstructing silent videos changes
 those terms. Sources and evaluation scope are documented in
-[the public-data evaluation record](docs/公开数据验收记录.md).
+[the public-data evaluation record](docs/开发与验证.md#data).
 
 Artwork retains the existing asset README and generation prompts. The user's
 `volleymole.svg` is included unchanged with its derived PNG; no rights in that

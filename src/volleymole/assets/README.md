@@ -18,19 +18,19 @@
 
 源 PNG 原样复制，保留生成的 alpha 通道；渲染时仅由现有视频 UI 做等比缩放与合成。完整生成提示词、逐文件 SHA-256 和生成记录见 [themes/prompts.json](illustrated/themes/prompts.json)。运行时直接读取包内素材，不访问生成工具或私有生成路径。
 
-插画仅作装饰，不代表真实球员、动作识别结论或比赛结果。它们与品牌标志、字体等素材的来源分开记录；项目代码的 MIT 许可不构成对 AI 生成图像独占版权或第三方权利的保证。风格用法和完整图集见 [插画风格指南](../../../docs/插画风格指南.md)。
+插画仅作装饰，不代表真实球员、动作识别结论或比赛结果。它们与品牌标志、字体等素材的来源分开记录；项目代码的 MIT 许可不构成对 AI 生成图像独占版权或第三方权利的保证。风格用法和完整图集见 [插画风格指南](../../../docs/模板与配音.md#illustrations)。
 
 ## 五套动画转场材质
 
 `transitions/` 包含 `velocity`、`paper`、`ink`、`prism`、`film` 五张独立不透明 PNG，分别采用竞技、纸艺、水墨、玻璃、胶片视觉语言。使用 Codex 内置 `image_gen` 逐张生成，原样复制到包内；提示词和 SHA-256 见 [生成记录](transitions/prompts.json)。没有使用 CLI/API 回退，也不在运行时依赖私有生成目录。
 
-`transitions.py` 对原始材质做运行时缩放、遮罩与合成，生成入退场动画。可导出的透明 ProRes 4444 MOV，其 alpha 是程序的运动遮罩，不是生图原图透明通道。原 PNG 不被修改。用法见 [动画转场指南](../../../docs/动画转场指南.md)。
+`transitions.py` 对原始材质做运行时缩放、遮罩与合成，生成入退场动画。可导出的透明 ProRes 4444 MOV，其 alpha 是程序的运动遮罩，不是生图原图透明通道。原 PNG 不被修改。用法见 [动画转场指南](../../../docs/模板与配音.md#transitions)。
 
 ## 完整视觉套装补充素材
 
 aurora-ball.png（`design_suites/aurora-ball.png`） 为极光棱镜套装新增的透明玻璃排球，用 Codex 内置 `image_gen` 生成并原样保存，未使用 CLI/API 回退。完整提示词和 SHA-256 见 [design_suites/prompts.json](design_suites/prompts.json)。套装为玻璃图像匹配深蓝空间、银白文字和冷色转场，不再使用黏土人物作为主体。
 
-其余完整套装复用原有插图与转场材质，代码负责字体、构图、配色和分层运动。所有源 PNG 和用户品牌标志保持不变；查看 [完整视觉套装指南](../../../docs/完整视觉套装指南.md)。
+其余完整套装复用原有插图与转场材质，代码负责字体、构图、配色和分层运动。所有源 PNG 和用户品牌标志保持不变；查看 [完整视觉套装指南](../../../docs/模板与配音.md#design-suites)。
 
 ## 用户提供的品牌标志
 
@@ -38,11 +38,11 @@ aurora-ball.png（`design_suites/aurora-ball.png`） 为极光棱镜套装新增
 
 ## 中文标题字体
 
-十二套中英标题模板另使用包内 `NotoSansCJKsc-Bold.otf`、`NotoSerifCJKsc-Regular.otf`、`NotoSans-Bold.ttf`、`NotoSans-BoldItalic.ttf` 和 `NotoSerif-Regular.ttf`。前两者从已安装的 Noto CJK 字体集合提取 SC 字面，保留全部字形和字体元数据；后三者原样复制。字体本身均保留 SIL OFL 1.1，完整分发来源及许可见 [Noto CJK 声明](fonts/NOTICE-Noto-CJK.txt) 和 [Noto Core 声明](fonts/NOTICE-Noto-Core.txt)。声明中的 Debian 打包文件许可与字体本身的 OFL 条目分开记录；本项目没有复制 Debian 打包源码。模板用法见 [标题模板指南](../../../docs/标题模板指南.md)。
+十二套中英标题模板另使用包内 `NotoSansCJKsc-Bold.otf`、`NotoSerifCJKsc-Regular.otf`、`NotoSans-Bold.ttf`、`NotoSans-BoldItalic.ttf` 和 `NotoSerif-Regular.ttf`。前两者从已安装的 Noto CJK 字体集合提取 SC 字面，保留全部字形和字体元数据；后三者原样复制。字体本身均保留 SIL OFL 1.1，完整分发来源及许可见 [Noto CJK 声明](fonts/NOTICE-Noto-CJK.txt) 和 [Noto Core 声明](fonts/NOTICE-Noto-Core.txt)。声明中的 Debian 打包文件许可与字体本身的 OFL 条目分开记录；本项目没有复制 Debian 打包源码。模板用法见 [标题模板指南](../../../docs/模板与配音.md#titles)。
 
 `fonts/ZCOOLKuaiLe-Regular.ttf` 是站酷快乐体，用于标题和转场大字。常规说明文字沿用运行参数中的正文字体。
 
-上述字体为运行环境的资源清单，不代表字体二进制已提交到 Git。所有文字绘制入口使用 `font_support.py` 检查字形；首选字体缺失、损坏或不能覆盖全文时尝试已部署的备用字体，不下载资源。英文趣味榜的中文事件标题因此可保留原文显示，旧版手写体也可回退显示重音字符与罕见汉字。没有任何可用字体覆盖全文时会明确失败，不输出缺字方框。完整规则和字体缓存说明见 [字体与分发](../../../docs/标题模板指南.md#字体与分发)。
+上述字体为运行环境的资源清单，不代表字体二进制已提交到 Git。所有文字绘制入口使用 `font_support.py` 检查字形；首选字体缺失、损坏或不能覆盖全文时尝试已部署的备用字体，不下载资源。英文趣味榜的中文事件标题因此可保留原文显示，旧版手写体也可回退显示重音字符与罕见汉字。没有任何可用字体覆盖全文时会明确失败，不输出缺字方框。完整规则和字体缓存说明见 [字体与分发](../../../docs/模板与配音.md#fonts)。
 
 字体与许可证下载自 [Google Fonts 的 ZCOOL KuaiLe 目录](https://github.com/google/fonts/tree/main/ofl/zcoolkuaile)。版权为 The ZCOOL KuaiLe Project Authors；随字体保留原始 [SIL OFL 1.1 许可证](https://raw.githubusercontent.com/google/fonts/main/ofl/zcoolkuaile/OFL.txt)，本地文件为 `fonts/OFL-ZCOOLKuaiLe.txt`。
 

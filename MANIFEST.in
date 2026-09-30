@@ -1,5 +1,5 @@
 include LICENSE README.md THIRD_PARTY.md CONTRIBUTING.md uv.lock llm_api.example.json
-recursive-include docs *.md *.png
+recursive-include docs *.md
 recursive-include scripts *.py *.md
 include templates/README.md
 recursive-include templates/builtin *.json

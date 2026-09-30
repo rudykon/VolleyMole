@@ -33,7 +33,7 @@ volleymole match --input-dir data/matches --date 2026-09-15 \
   --ranker rules --template atelier --output runs/matches
 ```
 
-`run` 默认五佳，`match` 默认十佳；使用 `--top-k 5` 或 `--top-k 10` 调整。输出目录保存成片、剪辑单和验证报告。更多安装说明见[安装与运行](docs/统一包安装与运行.md)。
+`run` 默认五佳，`match` 默认十佳；使用 `--top-k 5` 或 `--top-k 10` 调整。输出目录保存成片、剪辑单和验证报告。更多安装说明见[安装与运行](docs/README.md#install)。
 
 ## 网页工作台
 
@@ -46,7 +46,7 @@ volleymole web --open
 volleymole web --host 127.0.0.1 --host 172.22.13.156 --port 8787
 ```
 
-网页支持录像上传、单视频与多局剪辑、全部公开参数、模板编辑、任务队列与取消、真实视频封面与预览下载、慢回放复核、配音时间点编辑、模型与素材安装，以及 API 与算法配置。创建页按录像、目标、风格排列并提供可读摘要；首页优先展示任务与最近成片，媒体库分别管理比赛源片、剪辑素材与正式成片。`runs/` 仅供后台处理；网页成片统一保存在 `outputs/published/`，每份包含 `video.mp4`、`poster.jpg`、`manifest.json`，清理后台不影响已收录成片。任务详情显示真实阶段记录，生成后可直接播放，并将执行完成与成片检查分开展示。无需 Node.js 或前端构建，详见[网页工作台](docs/网页工作台.md)与[成片目录及格式](docs/成片目录与格式.md)。
+网页支持录像上传、单视频与多局剪辑、全部公开参数、模板编辑、任务队列与取消、真实视频封面与预览下载、慢回放复核、配音时间点编辑、模型与素材安装，以及 API 与算法配置。创建页按录像、目标、风格排列并提供可读摘要；首页优先展示任务与最近成片，媒体库分别管理比赛源片、剪辑素材与正式成片。`runs/` 仅供后台处理；网页成片统一保存在 `outputs/published/`，每份包含 `video.mp4`、`poster.jpg`、`manifest.json`，清理后台不影响已收录成片。任务详情显示真实阶段记录，生成后可直接播放，并将执行完成与成片检查分开展示。无需 Node.js 或前端构建，详见[网页工作台](docs/README.md#web)与[成片目录及格式](docs/README.md#outputs)。
 
 ## 自己的成片模板
 
@@ -77,14 +77,14 @@ volleymole run --video data/match.mp4 --ranker rules \
 | `archive` | 胶片纪事 |
 
 <p>
-  <img src="docs/images/design-suites/matchday.png" width="150" alt="赤线竞技">
-  <img src="docs/images/design-suites/atelier.png" width="150" alt="纸上球场">
-  <img src="docs/images/design-suites/aurora.png" width="150" alt="极光棱镜">
+  <img src="src/volleymole/web/static/previews/matchday.png" width="150" alt="赤线竞技">
+  <img src="src/volleymole/web/static/previews/atelier.png" width="150" alt="纸上球场">
+  <img src="src/volleymole/web/static/previews/aurora.png" width="150" alt="极光棱镜">
 </p>
 
-使用 `design_suite: "custom"` 可自由组合插画、标题和转场。配音仍是成片后的独立步骤，同一份模板通过 `meme-audio --template my-team` 生效。完整格式、优先级和命令见[自定义成片模板](docs/自定义成片模板.md)。
+使用 `design_suite: "custom"` 可自由组合插画、标题和转场。配音仍是成片后的独立步骤，同一份模板通过 `meme-audio --template my-team` 生效。完整格式、优先级和命令见[自定义成片模板](docs/模板与配音.md#custom-template)。
 
-全部模板统一保存在 [templates/](templates/README.md)：`builtin/` 存放五套内置配置，`custom/` 存放个人配置，`bundles/` 存放带字体、素材和代码快照的定稿包。命令行和网页使用相同目录规则，项目默认位置不随启动目录改变。详见[模板目录](docs/模板目录.md)和[水墨 v2.0.0 定稿版](docs/水墨模板定稿.md)。
+全部模板统一保存在 [templates/](templates/README.md)：`builtin/` 存放五套内置配置，`custom/` 存放个人配置，`bundles/` 存放带字体、素材和代码快照的定稿包。命令行和网页使用相同目录规则，项目默认位置不随启动目录改变。详见[模板目录](docs/模板与配音.md#template-library)和[水墨 v2.0.0 定稿版](docs/模板与配音.md#sumi)。
 
 ## 常用选项
 
@@ -100,7 +100,7 @@ volleymole run --video data/match.mp4 --ranker rules \
 | 添加本地配音 | `volleymole meme-audio --help` |
 | 查看全部参数 | `volleymole run --help` / `volleymole match --help` |
 
-语义模式会向配置的服务发送抽样画面，部分事件模式还使用音频。规则排名可离线运行；语义排名失败会记录规则兜底。检测、动作判断与自动配音仍可能出错，发布前请检查成片。详见[事件双榜](docs/事件理解与双榜.md)、[慢回放](docs/慢回放选点与完整性.md)与[配音](docs/克制梗配音.md)。
+语义模式会向配置的服务发送抽样画面，部分事件模式还使用音频。规则排名可离线运行；语义排名失败会记录规则兜底。检测、动作判断与自动配音仍可能出错，发布前请检查成片。详见[事件双榜](docs/自动化剪辑原理与流程.md#events)、[慢回放](docs/自动化剪辑原理与流程.md#replay)与[配音](docs/模板与配音.md#meme-local)。
 
 ## 仓库内容
 
@@ -108,7 +108,7 @@ volleymole run --video data/match.mp4 --ranker rules \
 src/volleymole/     运行代码、提示词与素材来源
 scripts/           素材准备、评测、预览与发布检查
 tests/            回归测试
-docs/             使用指南与设计预览
+docs/             使用、原理、模板与开发四份文档
 templates/        统一模板库：builtin/、custom/、bundles/
 ```
 

@@ -23,11 +23,11 @@ templates/
 
 ## 已确认的定稿包
 
-水墨 v2.0.0（2026-09-30）保存在 `bundles/sumi-v2.0.0/`，同目录的 `.zip` 为完整备份，`.sha256`、`.validation.json`、`.tests.log` 为校验与验证记录。包内 `preview.png` 是确认版预览；详细用法见[水墨模板定稿](../docs/水墨模板定稿.md)。
+水墨 v2.0.0（2026-09-30）保存在 `bundles/sumi-v2.0.0/`，同目录的 `.zip` 为完整备份，`.sha256`、`.validation.json`、`.tests.log` 为校验与验证记录。包内 `preview.png` 是确认版预览；详细用法见[水墨模板定稿](../docs/模板与配音.md#sumi)。
 
 ```bash
 # 在项目根目录校验
 .venv/bin/python templates/bundles/sumi-v2.0.0/sumi.py --verify
 ```
 
-内置配置和本文随源码保存，个人模板及定稿包保留在本机。完整目录规则、独立安装与迁移说明见[模板目录](../docs/模板目录.md)。
+内置配置和本文随源码保存，个人模板及定稿包保留在本机。完整目录规则、独立安装与迁移说明见[模板目录](../docs/模板与配音.md#template-library)。

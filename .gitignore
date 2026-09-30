@@ -78,8 +78,7 @@ build/
 *.tgz
 *.7z
 
-# Small documentation previews are published with the source.
-!docs/images/**/*.png
+# Documentation reuses the application's published previews.
 !src/volleymole/web/static/previews/*.png
 
 # Editor / OS files

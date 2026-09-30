@@ -9,7 +9,7 @@ src/volleymole/   CLI、模型适配、推理、回合、排名与渲染
   licenses/      改编源码的版权与许可说明
 tests/           自动测试及另行执行的真实模型测试
 scripts/         发布检查、素材准备、预览和评测工具
-docs/            使用说明、设计预览与评测资料
+docs/            使用、原理、模板与开发四份文档
 templates/       统一模板库：builtin/、custom/、bundles/
 ```
 

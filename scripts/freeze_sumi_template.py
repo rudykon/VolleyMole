@@ -70,7 +70,7 @@ def build(output):
             shutil.copyfile(ROOT / name, stage / name)
         shutil.copytree(ROOT / 'templates/builtin', stage / 'templates/builtin')
         shutil.copyfile(ROOT / 'scripts/sumi_frozen.py', stage / 'sumi.py')
-        shutil.copyfile(ROOT / 'docs/水墨模板定稿.md', stage / '使用说明.md')
+        shutil.copyfile(ROOT / 'docs/模板与配音.md', stage / '使用说明.md')
         shutil.copyfile(ROOT / 'src/volleymole/web/static/previews/sumi.png', stage / 'preview.png')
         shutil.copyfile(ROOT / 'templates/builtin/sumi.json', stage / 'template.json')
         read_template(stage / 'template.json')
